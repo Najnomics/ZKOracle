@@ -8,6 +8,7 @@ import { log } from "./logger.js";
 import { SqliteStateStore } from "./persistence/sqliteStore.js";
 import { computeShieldedEstimate } from "./estimator.js";
 import { startMetricsServer, stats } from "./metrics.js";
+import { fetchWithRetries } from "./utils/retry.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
@@ -56,14 +57,15 @@ async function runIndexer() {
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      const [lightwalletdTxs] = await Promise.all([
+      const lightwalletdTxs = await fetchWithRetries(() =>
         lightwalletd.fetchRecentTransactions(cursor, config.WALLETD_Z_ADDRS),
-      ]);
+      );
 
       const txs = lightwalletdTxs.filter((tx) => !store.hasProcessed(tx.txid));
       if (zcashd && txs.length === 0) {
-        // Optionally fall back to zcashd RPC if lightwalletd yields nothing.
-        const supplemental = await zcashd.listReceivedByAddress("shielded-address-placeholder");
+        const supplemental = await fetchWithRetries(() =>
+          zcashd.listReceivedByAddress("shielded-address-placeholder"),
+        );
         supplemental.forEach((tx) => {
           if (!store.hasProcessed(tx.txid)) {
             txs.push({ txid: tx.txid, blockTime: tx.timestamp, pool: "sapling" });
@@ -80,7 +82,7 @@ async function runIndexer() {
           const scaled = Math.min(estimate * config.SUBMISSION_SCALE, 2 ** 32 - 1);
 
           const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
-          const response = await oracle.submitData(encrypted);
+          const response = await fetchWithRetries(() => oracle.submitData(encrypted));
           await response.wait();
 
           store.markProcessed(tx.txid);
@@ -95,6 +97,11 @@ async function runIndexer() {
       }
     } catch (error) {
       log.error("Indexer loop iteration failed", { error });
+      await fetchWithRetries(
+        () => Promise.reject(error),
+        0,
+        0,
+      ).catch(() => undefined);
     }
 
     stats.incrementIterations();

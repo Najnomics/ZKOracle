@@ -753,6 +753,9 @@ const indexer = new ZcashIndexer(
 indexer.runAggregation().catch(console.error);
 ```
 
+> See `indexer/README.md` for the production TypeScript implementation, including gRPC filters, retries, SQLite-backed
+> persistence, CLI helpers, and the `pnpm test` workflow.
+
 > A typed skeleton of this service now lives in `indexer/`. Use it as the starting point for productionizing the off-chain
 > flow (see `indexer/README.md` and `indexer/config/example.env` for wiring details).
 
@@ -1021,6 +1024,9 @@ npm run test:coverage
 
 # Foundry (contracts/)
 cd contracts && pnpm install && forge test
+
+# Indexer tests (Vitest)
+cd indexer && pnpm install && pnpm test
 ```
 
 ### Test Suite
