@@ -1,23 +1,12 @@
 import "dotenv/config";
 import { ethers } from "ethers";
-import { FhenixClient, EncryptionTypes } from "@fhenixprotocol/fhenixjs";
+import { FhenixClient, EncryptionTypes } from "fhenixjs";
 import { LightwalletdClient } from "./clients/lightwalletd.js";
+import { ZcashRpcClient } from "./clients/zcashRpc.js";
+import { loadConfig } from "./config.js";
+import { log } from "./logger.js";
 
-const {
-  FHENIX_RPC_URL = "https://api.nitrogen.fhenix.zone",
-  ORACLE_ADDRESS,
-  INDEXER_PRIVATE_KEY,
-  SUBMISSION_SCALE = "10000",
-  MAX_BATCH_SIZE = "32",
-  POLL_INTERVAL_MS = "15000",
-  LIGHTWALLETD_ENDPOINT = "http://localhost:9067",
-} = process.env;
-
-if (!ORACLE_ADDRESS || !INDEXER_PRIVATE_KEY) {
-  throw new Error("Missing ORACLE_ADDRESS or INDEXER_PRIVATE_KEY in env");
-}
-
-const oracleAbi = [
+const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
   "function periodDuration() view returns (uint256)",
   "function periodStart() view returns (uint256)",
@@ -26,47 +15,83 @@ const oracleAbi = [
 class ZcashEstimator {
   estimateAmount(txTime: number): number {
     // TODO: implement statistical estimator described in ZCASH_ECOSYSTEM_STUDY.md
-    return Math.floor(Math.random() * 1_000_000);
+    const base = Math.sin(txTime / 600) * 50_000 + 75_000;
+    return Math.max(1, Math.floor(base + Math.random() * 5_000));
   }
 }
 
-async function main() {
-  const provider = new ethers.JsonRpcProvider(FHENIX_RPC_URL);
-  const wallet = new ethers.Wallet(INDEXER_PRIVATE_KEY!, provider);
-  const oracle = new ethers.Contract(ORACLE_ADDRESS, oracleAbi, wallet);
-  const fhe = new FhenixClient({ provider });
+async function runIndexer() {
+  const config = loadConfig();
+  const provider = new ethers.JsonRpcProvider(config.FHENIX_RPC_URL);
+  const wallet = new ethers.Wallet(config.INDEXER_PRIVATE_KEY, provider);
+  const oracle = new ethers.Contract(config.ORACLE_ADDRESS, ORACLE_ABI, wallet);
+  const fhe = new FhenixClient({ provider: provider as any });
 
-  const lightwalletd = new LightwalletdClient(LIGHTWALLETD_ENDPOINT);
+  const lightwalletd = new LightwalletdClient(config.LIGHTWALLETD_ENDPOINT);
+  const zcashd =
+    config.ZCASHD_RPC_URL && config.ZCASHD_RPC_USER && config.ZCASHD_RPC_PASSWORD
+      ? new ZcashRpcClient(
+          config.ZCASHD_RPC_URL,
+          config.ZCASHD_RPC_USER,
+          config.ZCASHD_RPC_PASSWORD,
+        )
+      : undefined;
   const estimator = new ZcashEstimator();
-
+  const processedTxs = new Set<string>();
   let cursor = Math.floor(Date.now() / 1000);
-  const scale = Number(SUBMISSION_SCALE);
-  const maxBatch = Number(MAX_BATCH_SIZE);
-  const pollMs = Number(POLL_INTERVAL_MS);
+
+  log.info("Indexer booted", {
+    oracle: config.ORACLE_ADDRESS,
+    pollInterval: config.POLL_INTERVAL_MS,
+    scale: config.SUBMISSION_SCALE,
+  });
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const txs = await lightwalletd.fetchRecentTransactions(cursor);
-    if (txs.length > 0) {
-      const batch = txs.slice(0, maxBatch);
-      for (const tx of batch) {
-        const estimate = estimator.estimateAmount(tx.blockTime);
-        const scaled = Math.min(estimate * scale, 2 ** 32 - 1);
+    try {
+      const [lightwalletdTxs] = await Promise.all([
+        lightwalletd.fetchRecentTransactions(cursor),
+      ]);
 
-        const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
-        const txResponse = await oracle.submitData(encrypted);
-        await txResponse.wait();
-
-        cursor = Math.max(cursor, tx.blockTime);
+      const txs = lightwalletdTxs.filter((tx) => !processedTxs.has(tx.txid));
+      if (zcashd && txs.length === 0) {
+        // Optionally fall back to zcashd RPC if lightwalletd yields nothing.
+        const supplemental = await zcashd.listReceivedByAddress("shielded-address-placeholder");
+        supplemental.forEach((tx) => {
+          if (!processedTxs.has(tx.txid)) {
+            txs.push({ txid: tx.txid, blockTime: tx.timestamp, pool: "sapling" });
+          }
+        });
       }
+
+      if (txs.length > 0) {
+        const batch = txs.slice(0, config.MAX_BATCH_SIZE);
+        log.info("Submitting batch", { batchSize: batch.length });
+
+        for (const tx of batch) {
+          const estimate = estimator.estimateAmount(tx.blockTime);
+          const scaled = Math.min(estimate * config.SUBMISSION_SCALE, 2 ** 32 - 1);
+
+          const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
+          const response = await oracle.submitData(encrypted);
+          await response.wait();
+
+          processedTxs.add(tx.txid);
+          cursor = Math.max(cursor, tx.blockTime);
+        }
+      } else {
+        log.info("No new shielded txs found");
+      }
+    } catch (error) {
+      log.error("Indexer loop iteration failed", { error });
     }
 
-    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
   }
 }
 
-main().catch((error) => {
-  console.error("Indexer loop failed", error);
+runIndexer().catch((error) => {
+  log.error("Indexer crashed", { error });
   process.exit(1);
 });
 
