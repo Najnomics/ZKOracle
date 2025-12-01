@@ -645,6 +645,17 @@ contract ZKOracle {
 }
 ```
 
+### Reference Consumer (`OracleConsumer.sol`)
+
+`contracts/src/OracleConsumer.sol` ships as a ready-made adapter for downstream protocols. It:
+
+- Pulls `getLatestPrice()` from the oracle.
+- Requires the data to be fresher than a configurable threshold and above a minimum confidence score.
+- Exposes `quote(uint256 amount)` which returns an amount scaled by `1e4`, matching the default `SUBMISSION_SCALE`.
+- Emits custom errors (`ConsumerStale`, `ConsumerLowConfidence`) so integrators can differentiate failure causes.
+
+A Foundry integration suite (`test/ZKOracleIntegration.t.sol`) keeps the oracle + consumer flow covered end-to-end.
+
 ### Indexer (Off-Chain)
 
 ```javascript
@@ -874,6 +885,10 @@ pnpm start # runs the lease-aware indexer + auto-finalizer
 
 # Optional: keep it alive with PM2/systemd
 pm2 start pnpm --name zkoracle-indexer -- start
+
+# Health & metrics
+curl http://localhost:9464/metrics
+curl http://localhost:9464/healthz | jq
 ```
 
 ---
@@ -1034,6 +1049,7 @@ Conclusion: Privacy preserved!
 - **Smoke tests**: `scripts/smoke-test.sh` spins up the docker-compose stack (zcashd + lightwalletd + indexer + Prometheus), waits for readiness, hits `/metrics`, and tails logs—ideal for CI or release gating.
 - **Structured logging**: the indexer uses `winston` with JSON output so logs can be shipped to any SIEM or centralized logging platform without modification.
 - **Lease-aware failover**: each replica sets `INDEXER_INSTANCE_ID`; the SQLite coordination lease guarantees only one active submitter at a time and exports `zkoracle_lease_active` so dashboards/alerts can track leadership changes.
+- **HTTP health probe**: the metrics server also exposes `GET /healthz`, returning the current cursor, lease holder, last loop/finalize timestamps, and the most recent error (if any) for k8s-style readiness checks.
 
 ---
 

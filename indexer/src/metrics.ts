@@ -1,12 +1,6 @@
 import { Counter, Gauge, Registry } from "prom-client";
 import express from "express";
-import type { Request, Response } from "express";
-
-type MetricsResponse = {
-  setHeader(name: string, value: string): void;
-  end(body: string): void;
-};
-
+import type { Request, Response } from "express-serve-static-core";
 const register = new Registry();
 const submittedCounter = new Counter({
   name: "zkoracle_submissions_total",
@@ -36,15 +30,28 @@ export const stats = {
   },
 };
 
-export function startMetricsServer(port = 9464) {
+export type HealthSupplier = () => Promise<Record<string, unknown>> | Record<string, unknown>;
+
+export function startMetricsServer(port = 9464, getHealth?: HealthSupplier) {
   const app = express();
   app.get("/metrics", async (_req: Request, res: Response) => {
-    const response = res as unknown as MetricsResponse;
-    response.setHeader("Content-Type", register.contentType);
-    response.end(await register.metrics());
+    res.set("Content-Type", register.contentType);
+    res.send(await register.metrics());
   });
+
+  if (getHealth) {
+    app.get("/healthz", async (_req: Request, res: Response) => {
+      try {
+        const payload = await getHealth();
+        res.json({ status: "ok", ...payload });
+      } catch (error) {
+        res.status(500).json({ status: "error", error: (error as Error).message });
+      }
+    });
+  }
+
   app.listen(port, () => {
-    console.log(`[METRICS] listening on :${port}/metrics`);
+    console.log(`[METRICS] listening on :${port} (metrics + healthz)`);
   });
 }
 

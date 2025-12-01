@@ -70,6 +70,7 @@ pnpm cli cursor
 - Run `scripts/smoke-test.sh` to validate the docker stack before deploying new versions.
 - Extend the Vitest test suite (`pnpm test`) as new modules are introduced to keep coverage high.
 - Keep the alerting hooks in `logger.ts` wired into the polling loop (`log.info`) for runtime observability.
+- Every process exposes `GET /healthz` (served by the same Express app as `/metrics`) so you can plug the indexer into Kubernetes-style readiness checks or simple curl-based monitoring.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.
 

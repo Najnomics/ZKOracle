@@ -21,7 +21,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runIndexer() {
   const config = loadConfig();
-  startMetricsServer(config.METRICS_PORT);
 
   const provider = new ethers.JsonRpcProvider(config.FHENIX_RPC_URL);
   const wallet = new ethers.Wallet(config.INDEXER_PRIVATE_KEY, provider);
@@ -48,11 +47,39 @@ async function runIndexer() {
   let lastLeaseHolder: string | null = null;
   let closed = false;
 
+  type HealthState = {
+    instanceId: string;
+    cursor: number;
+    leaseHolder: string | null;
+    leaseExpiresAt: number;
+    leaseActive: boolean;
+    lastLoopAt: number;
+    lastFinalizeAt?: number;
+    lastError?: string;
+  };
+
+  const health: HealthState = {
+    instanceId: config.INDEXER_INSTANCE_ID,
+    cursor,
+    leaseHolder: null,
+    leaseExpiresAt: 0,
+    leaseActive: false,
+    lastLoopAt: Date.now(),
+  };
+
+  startMetricsServer(config.METRICS_PORT, () => ({
+    ...health,
+    timestamp: Date.now(),
+  }));
+
   const releaseLeaseAndClose = (signal?: string) => {
     if (closed) return;
     closed = true;
     const released = store.releaseLease(config.INDEXER_INSTANCE_ID);
     stats.setLeaseActive(false);
+    health.leaseActive = false;
+    health.leaseHolder = null;
+    health.leaseExpiresAt = 0;
     store.close();
     if (signal) {
       log.info(`Shutting down (${signal})`, { released });
@@ -71,6 +98,10 @@ async function runIndexer() {
       if (claimed) {
         leaseExpiry = now + config.LEASE_TTL_SECONDS;
         stats.setLeaseActive(true);
+        health.leaseActive = true;
+        health.leaseHolder = config.INDEXER_INSTANCE_ID;
+        health.leaseExpiresAt = leaseExpiry;
+        health.lastError = undefined;
         if (lastLeaseHolder !== config.INDEXER_INSTANCE_ID) {
           log.info("Acquired coordination lease", { instance: config.INDEXER_INSTANCE_ID, expiresAt: leaseExpiry });
           lastLeaseHolder = config.INDEXER_INSTANCE_ID;
@@ -80,6 +111,9 @@ async function runIndexer() {
 
       const lease = store.getLeaseState();
       stats.setLeaseActive(false);
+      health.leaseActive = false;
+      health.leaseHolder = lease.holder;
+      health.leaseExpiresAt = lease.expiresAt ?? 0;
       const holder = lease.holder ?? "unknown";
       if (holder !== lastLeaseHolder) {
         log.warn("Lease currently held by another instance", lease);
@@ -102,6 +136,7 @@ async function runIndexer() {
       const tx = await fetchWithRetries(() => oracle.finalizePeriod());
       await tx.wait();
       log.info("Finalized oracle period", { deadline, timestamp: latestBlock.timestamp });
+      health.lastFinalizeAt = Date.now();
     } catch (error) {
       const message = (error as Error).message || "";
       if (message.includes("OracleNoSamples")) {
@@ -111,6 +146,7 @@ async function runIndexer() {
       } else {
         log.error("Failed to finalize oracle period", { error: message });
         await sendAlert("Finalize period failed", { error: message });
+        health.lastError = message;
       }
     }
   };
@@ -182,11 +218,15 @@ async function runIndexer() {
       } else {
         log.info("No new shielded txs found");
       }
+      health.cursor = cursor;
+      health.lastError = undefined;
       } catch (error) {
         log.error("Indexer loop iteration failed", { error });
+        health.lastError = (error as Error).message;
         await sendAlert("Indexer loop error", { error: (error as Error).message });
       }
 
+      health.lastLoopAt = Date.now();
       await maybeFinalizePeriod();
 
       stats.incrementIterations();

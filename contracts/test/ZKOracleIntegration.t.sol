@@ -4,24 +4,11 @@ pragma solidity ^0.8.25;
 import { Test } from "forge-std/src/Test.sol";
 import { ZKOracle } from "../src/ZKOracle.sol";
 import { FheEnabled } from "../util/FheHelper.sol";
-import { IZKOracle } from "../src/interfaces/IZKOracle.sol";
-
-contract MockConsumer {
-    IZKOracle public immutable oracle;
-
-    constructor(address _oracle) {
-        oracle = IZKOracle(_oracle);
-    }
-
-    function latestFresh(uint256 maxAge) external view returns (uint256 price, uint32 sampleSize) {
-        require(oracle.isFresh(maxAge), "STALE");
-        (price,,, sampleSize) = oracle.getLatestPrice();
-    }
-}
+import { OracleConsumer } from "../src/OracleConsumer.sol";
 
 contract ZKOracleIntegrationTest is Test, FheEnabled {
     ZKOracle internal oracle;
-    MockConsumer internal consumer;
+    OracleConsumer internal consumer;
 
     address internal admin;
     address internal indexer;
@@ -34,14 +21,14 @@ contract ZKOracleIntegrationTest is Test, FheEnabled {
         admin = vm.addr(0xABCD);
         indexer = vm.addr(0xCAFE);
         oracle = new ZKOracle(indexer, PERIOD, MAX_SAMPLES, SCALE, admin);
-        consumer = new MockConsumer(address(oracle));
+        consumer = new OracleConsumer(address(oracle), 1 days, 35, admin);
     }
 
     function testEndToEndIndexerLoopFeedsConsumer() public {
         uint32[] memory samples = new uint32[](3);
-        samples[0] = 100;
-        samples[1] = 250;
-        samples[2] = 150;
+        samples[0] = 100_000;
+        samples[1] = 250_000;
+        samples[2] = 150_000;
 
         for (uint256 i; i < samples.length; i++) {
             vm.prank(indexer);
@@ -52,15 +39,18 @@ contract ZKOracleIntegrationTest is Test, FheEnabled {
         vm.prank(indexer);
         oracle.finalizePeriod();
 
-        (uint256 price, uint32 sampleSize) = consumer.latestFresh(1 days);
+        OracleConsumer.PriceInfo memory info = consumer.latestPrice();
         uint256 expectedAverage = (samples[0] + samples[1] + samples[2]) / samples.length;
-        assertEq(price, expectedAverage);
-        assertEq(sampleSize, samples.length);
+        assertEq(info.price, expectedAverage);
+        assertEq(info.sampleSize, samples.length);
+
+        uint256 quoteAmount = consumer.quote(20_000); // 2.0 units (scaled by 1e4)
+        assertEq(quoteAmount, (expectedAverage * 20_000) / 1e4);
     }
 
     function testStaleDataRejectedByConsumer() public {
         vm.prank(indexer);
-        oracle.submitData(encrypt32(400));
+        oracle.submitData(encrypt32(400_000));
 
         vm.warp(block.timestamp + PERIOD + 1);
         vm.prank(indexer);
@@ -68,8 +58,22 @@ contract ZKOracleIntegrationTest is Test, FheEnabled {
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.expectRevert("STALE");
-        consumer.latestFresh(1 days);
+        vm.expectRevert(OracleConsumer.ConsumerStale.selector);
+        consumer.latestPrice();
+    }
+
+    function testConsumerRejectsLowConfidence() public {
+        OracleConsumer strictConsumer = new OracleConsumer(address(oracle), 1 days, 95, admin);
+
+        vm.prank(indexer);
+        oracle.submitData(encrypt32(50_000));
+
+        vm.warp(block.timestamp + PERIOD + 1);
+        vm.prank(indexer);
+        oracle.finalizePeriod();
+
+        vm.expectRevert(OracleConsumer.ConsumerLowConfidence.selector);
+        strictConsumer.latestPrice();
     }
 }
 
