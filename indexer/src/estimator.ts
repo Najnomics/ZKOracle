@@ -1,23 +1,34 @@
 import { ShieldedTxMetadata } from "./clients/lightwalletd.js";
 
-const WINDOW = 50;
-const alpha = 0.6;
-let weightedAverage = 75_000;
-const history: number[] = [];
+const MAX_SAMPLES = 200;
+const smoothingFactor = 0.4;
+const poolBias: Record<ShieldedTxMetadata["pool"], number> = {
+  sapling: 1.0,
+  orchard: 1.2,
+};
+
+const samples: number[] = [];
+
+function weightedAverage(): number {
+  if (!samples.length) return 0;
+  const totalWeight = samples.length * (samples.length + 1) - samples.length * (samples.length - 1) / 2;
+  return (
+    samples.reduce((acc, value, index) => acc + value * (index + 1), 0) /
+    totalWeight
+  );
+}
 
 export function computeShieldedEstimate(tx: ShieldedTxMetadata): number {
-  const timingComponent = Math.sin(tx.blockTime / 600) * 15_000 + 50_000;
-  if (history.length) {
-    const recentAverage = history.reduce((acc, value) => acc + value, 0) / history.length;
-    weightedAverage = alpha * timingComponent + (1 - alpha) * recentAverage;
-  } else {
-    weightedAverage = timingComponent;
-  }
+  const timing = Math.max(1, Math.sin(tx.blockTime / 900) * 25_000 + 80_000);
+  const bias = poolBias[tx.pool] ?? 1;
 
-  const rounded = Math.max(1, Math.round(weightedAverage));
-  history.push(rounded);
-  if (history.length > WINDOW) {
-    history.shift();
+  const baseline = weightedAverage() || 90_000;
+  const estimate = smoothingFactor * baseline + (1 - smoothingFactor) * timing * bias;
+
+  const rounded = Math.max(1, Math.round(estimate));
+  samples.push(rounded);
+  if (samples.length > MAX_SAMPLES) {
+    samples.shift();
   }
 
   return rounded;

@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import { log } from "./logger.js";
 import { appendTx, loadState, saveState } from "./store.js";
 import { computeShieldedEstimate } from "./estimator.js";
+import { stats } from "./metrics.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
@@ -41,7 +42,6 @@ async function runIndexer() {
   let state = await loadState(config.STATE_FILE);
   const processedTxs = new Set<string>(state.processedTxIds);
   let cursor = state.cursor;
-  const stats = { submitted: 0, iterations: 0 };
 
   log.info("Indexer booted", {
     oracle: config.ORACLE_ADDRESS,
@@ -82,7 +82,7 @@ async function runIndexer() {
           processedTxs.add(tx.txid);
           cursor = Math.max(cursor, tx.blockTime);
           state = appendTx(state, tx.txid);
-          stats.submitted += 1;
+          stats.incrementSubmitted();
         }
 
         state.cursor = cursor;
@@ -95,7 +95,7 @@ async function runIndexer() {
       log.error("Indexer loop iteration failed", { error });
     }
 
-    stats.iterations += 1;
+    stats.incrementIterations();
     await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
   }
 }
