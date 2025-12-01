@@ -13,6 +13,8 @@ This folder tracks the off-chain service that:
 - `src/clients/lightwalletd.ts` – lightweight client stub (replace with a gRPC client derived from `CONTEXT/lightwallet-protocol/walletrpc`).
 - `src/clients/zcashRpc.ts` – optional fallback client that hits `zcashd` directly via JSON-RPC.
 - `src/config.ts` – shared configuration loader/validation built with `zod`.
+- `src/store.ts` – file-based persistence for cursors and processed tx IDs (defaults to `./data/state.json`).
+- `src/estimator.ts` – placeholder statistical estimator; replace with the heuristics from `ZCASH_ECOSYSTEM_STUDY.md`.
 - `config/example.env` – environment variable reference (RPC URLs, keys, batching settings).
 
 ## Getting Started
@@ -37,12 +39,13 @@ pnpm start
 | `LIGHTWALLETD_ENDPOINT`| URL to a Lightwalletd instance                                 |
 | `ZCASHD_RPC_URL`       | Optional fallback `zcashd` RPC endpoint                        |
 | `ZCASHD_RPC_USER/PASSWORD` | Credentials for the optional fallback RPC                 |
+| `STATE_FILE`           | Path to JSON file storing cursor + processed TX IDs           |
 
 ### Notes
 
 - Replace `lightwalletd.ts` with a generated gRPC client using the files under `CONTEXT/lightwallet-protocol/walletrpc`.
-- Implement the statistical estimator in `src/indexer.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
-- Add persistence (e.g., SQLite or Redis) for cursors/processed tx IDs before production usage.
+- Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
+- Replace the file-based store with a durable database (SQLite, Redis, DynamoDB, etc.) for production usage.
 - Metrics/alerting hooks should be wired into the polling loop (`log.info`) for observability.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.

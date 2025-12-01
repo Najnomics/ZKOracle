@@ -5,6 +5,8 @@ import { LightwalletdClient } from "./clients/lightwalletd.js";
 import { ZcashRpcClient } from "./clients/zcashRpc.js";
 import { loadConfig } from "./config.js";
 import { log } from "./logger.js";
+import { HeuristicEstimator } from "./estimator.js";
+import { appendTx, loadState, saveState } from "./store.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
@@ -36,9 +38,11 @@ async function runIndexer() {
           config.ZCASHD_RPC_PASSWORD,
         )
       : undefined;
-  const estimator = new ZcashEstimator();
-  const processedTxs = new Set<string>();
-  let cursor = Math.floor(Date.now() / 1000);
+  const estimator = new HeuristicEstimator();
+  let state = await loadState(config.STATE_FILE);
+  const processedTxs = new Set<string>(state.processedTxIds);
+  let cursor = state.cursor;
+  const stats = { submitted: 0, iterations: 0 };
 
   log.info("Indexer booted", {
     oracle: config.ORACLE_ADDRESS,
@@ -69,7 +73,7 @@ async function runIndexer() {
         log.info("Submitting batch", { batchSize: batch.length });
 
         for (const tx of batch) {
-          const estimate = estimator.estimateAmount(tx.blockTime);
+          const estimate = estimator.estimate(tx);
           const scaled = Math.min(estimate * config.SUBMISSION_SCALE, 2 ** 32 - 1);
 
           const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
@@ -78,7 +82,13 @@ async function runIndexer() {
 
           processedTxs.add(tx.txid);
           cursor = Math.max(cursor, tx.blockTime);
+          state = appendTx(state, tx.txid);
+          stats.submitted += 1;
         }
+
+        state.cursor = cursor;
+        await saveState(config.STATE_FILE, state);
+        log.info("Batch submitted", { totalSubmitted: stats.submitted, cursor });
       } else {
         log.info("No new shielded txs found");
       }
@@ -86,6 +96,7 @@ async function runIndexer() {
       log.error("Indexer loop iteration failed", { error });
     }
 
+    stats.iterations += 1;
     await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
   }
 }

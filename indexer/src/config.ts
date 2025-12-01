@@ -10,6 +10,7 @@ const schema = z.object({
   MAX_BATCH_SIZE: z.coerce.number().positive().max(512).default(32),
   POLL_INTERVAL_MS: z.coerce.number().min(5_000).default(15_000),
   LIGHTWALLETD_ENDPOINT: z.string().url(),
+  STATE_FILE: z.string().default("./data/state.json"),
   ZCASHD_RPC_URL: z.string().url().optional(),
   ZCASHD_RPC_USER: z.string().optional(),
   ZCASHD_RPC_PASSWORD: z.string().optional(),
