@@ -15,7 +15,8 @@ This folder tracks the off-chain service that:
 - `src/config.ts` – shared configuration loader/validation built with `zod`.
 - `src/store.ts` – file-based persistence for cursors and processed tx IDs (defaults to `./data/state.json`).
 - `src/estimator.ts` – placeholder statistical estimator; replace with the heuristics from `ZCASH_ECOSYSTEM_STUDY.md`.
-- `config/example.env` – environment variable reference (RPC URLs, keys, batching settings).
+- `monitoring/` – Prometheus/Grafana assets for alerting & dashboards (see `monitoring/README.md`).
+- `docker-compose.yml` + `Dockerfile` – optional deployment stack (zcashd + lightwalletd + indexer).
 
 ## Getting Started
 
@@ -27,6 +28,7 @@ pnpm start
 
 # dockerized stack (zcashd + lightwalletd + indexer)
 docker compose up -d
+open http://localhost:9090 (Prometheus) and http://localhost:3000 (Grafana)
 
 # run unit tests
 pnpm test
@@ -56,9 +58,12 @@ pnpm cli cursor
 - Regenerate the gRPC client from `CONTEXT/lightwallet-protocol/walletrpc` if the proto definitions change.
 - Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
 - Replace the SQLite store with a clustered database (e.g., PostgreSQL) if multiple indexer replicas are needed.
-- Scrape `/metrics` from `METRICS_PORT` with Prometheus (or any OpenMetrics compatible collector) for alerting.
+- Scrape `/metrics` from `METRICS_PORT` with Prometheus (see `monitoring/README.md` for sample config + dashboards).
+- Configure `ALERT_WEBHOOK_URL` to forward critical errors to Slack/Mattermost.
+- Use `pnpm watch:zcash` alongside the main indexer to surface upstream `zcashd` issues quickly.
+- Run `scripts/smoke-test.sh` to validate the docker stack before deploying new versions.
 - Extend the Vitest test suite (`pnpm test`) as new modules are introduced to keep coverage high.
-- Metrics/alerting hooks should be wired into the polling loop (`log.info`) for observability.
+- Keep the alerting hooks in `logger.ts` wired into the polling loop (`log.info`) for runtime observability.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.
 

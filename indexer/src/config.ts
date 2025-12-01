@@ -17,6 +17,7 @@ const schema = z.object({
     .default(""),
   STATE_DB_PATH: z.string().default("./data/indexer.db"),
   METRICS_PORT: z.coerce.number().default(9464),
+  ALERT_WEBHOOK_URL: z.string().optional(),
   ZCASHD_RPC_URL: z.string().url().optional(),
   ZCASHD_RPC_USER: z.string().optional(),
   ZCASHD_RPC_PASSWORD: z.string().optional(),

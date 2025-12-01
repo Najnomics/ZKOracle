@@ -1,0 +1,31 @@
+{
+  "title": "ZKOracle Indexer Overview",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Submissions per minute",
+      "targets": [
+        {
+          "expr": "rate(zkoracle_submissions_total[5m])"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Loop iterations per minute",
+      "targets": [
+        {
+          "expr": "rate(zkoracle_iterations_total[5m])"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "schemaVersion": 39,
+  "version": 1
+}
+

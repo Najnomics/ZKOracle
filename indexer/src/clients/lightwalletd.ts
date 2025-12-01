@@ -26,7 +26,7 @@ type LightwalletdPackage = {
   };
 };
 
-const protoDescriptor = loadPackageDefinition(packageDefinition) as LightwalletdPackage;
+const protoDescriptor = loadPackageDefinition(packageDefinition) as unknown as LightwalletdPackage;
 const WalletGrpc = protoDescriptor.walletrpc.CompactTxStreamer;
 
 export interface ShieldedTxMetadata {

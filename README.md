@@ -476,6 +476,7 @@ With 100+ transactions:
 > **Foundry reference implementation:** All current contracts and tests live under `contracts/` (see
 > `contracts/src/ZKOracle.sol` and `contracts/test/ZKOracle.t.sol`). Run `pnpm install && forge test` from that directory
 > to compile against the Fhenix toolkit and execute the CoFHE-aware Foundry test suite.
+> Docker users can also boot `zcashd`, `lightwalletd`, the indexer, and Prometheus using `indexer/docker-compose.yml`.
 
 ### Smart Contract (Core)
 
@@ -1027,6 +1028,9 @@ cd contracts && pnpm install && forge test
 
 # Indexer tests (Vitest)
 cd indexer && pnpm install && pnpm test
+
+# Indexer lint
+cd indexer && pnpm lint
 ```
 
 ### Test Suite

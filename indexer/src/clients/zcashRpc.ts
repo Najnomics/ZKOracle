@@ -2,7 +2,9 @@ import axios, { AxiosInstance } from "axios";
 
 export interface ZcashShieldedTx {
   txid: string;
-  timestamp: number;
+  amount?: number;
+  confirmations?: number;
+  blocktime?: number;
   address?: string;
   memo?: string;
 }
