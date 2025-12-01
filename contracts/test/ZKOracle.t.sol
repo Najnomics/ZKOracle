@@ -99,5 +99,72 @@ contract ZKOracleTest is Test, FheEnabled {
         vm.expectRevert(ZKOracle.OracleMaxSamplesReached.selector);
         oracle.submitData(encrypt32(5));
     }
+
+    function testOwnerCanFinalizeWhenIndexerUnavailable() public {
+        vm.prank(indexer);
+        oracle.submitData(encrypt32(77));
+
+        vm.warp(block.timestamp + PERIOD + 1);
+        vm.prank(admin);
+        oracle.finalizePeriod();
+
+        (uint256 price,,,) = oracle.getLatestPrice();
+        assertEq(price, 77);
+    }
+
+    function testSealLatestPriceRevertsIfNotReady() public {
+        vm.expectRevert(ZKOracle.OracleNotReady.selector);
+        oracle.sealLatestPrice(bytes32(uint256(1)));
+    }
+
+    function testPeriodResetsAfterFinalize() public {
+        vm.prank(indexer);
+        oracle.submitData(encrypt32(12));
+        uint256 startBefore = oracle.periodStart();
+
+        vm.warp(block.timestamp + PERIOD + 1);
+        vm.prank(indexer);
+        oracle.finalizePeriod();
+
+        assertEq(oracle.currentSampleSize(), 0);
+        assertGt(oracle.periodStart(), startBefore);
+    }
+
+    function testIsFreshChecksStalenessWindow() public {
+        vm.prank(indexer);
+        oracle.submitData(encrypt32(33));
+
+        vm.warp(block.timestamp + PERIOD + 1);
+        vm.prank(indexer);
+        oracle.finalizePeriod();
+
+        assertTrue(oracle.isFresh(2 hours));
+
+        vm.warp(block.timestamp + 3 hours);
+        assertFalse(oracle.isFresh(1 hours));
+    }
+
+    function testMultiPeriodCycleMaintainsState() public {
+        uint32 base = 20;
+        for (uint256 i; i < 3; i++) {
+            vm.prank(indexer);
+            oracle.submitData(encrypt32(base + uint32(i)));
+
+            vm.warp(block.timestamp + PERIOD + 1);
+            vm.prank(indexer);
+            oracle.finalizePeriod();
+
+            (uint256 price,, uint256 conf, uint32 sampleSize) = oracle.getLatestPrice();
+            assertEq(price, base + i);
+            assertEq(sampleSize, 1);
+            assertGt(conf, 0);
+        }
+    }
+
+    function testUpdatePeriodDurationRejectsZero() public {
+        vm.prank(admin);
+        vm.expectRevert(ZKOracle.OraclePeriodActive.selector);
+        oracle.updatePeriodDuration(0);
+    }
 }
 

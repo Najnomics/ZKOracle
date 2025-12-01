@@ -16,6 +16,8 @@ const ORACLE_ABI = [
   "function periodStart() view returns (uint256)",
 ] as const;
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function runIndexer() {
   const config = loadConfig();
   startMetricsServer(config.METRICS_PORT);
@@ -41,6 +43,55 @@ async function runIndexer() {
       : undefined;
   const store = new SqliteStateStore(config.STATE_DB_PATH);
   let cursor = store.getCursor();
+  let leaseExpiry = 0;
+  let lastLeaseHolder: string | null = null;
+  let closed = false;
+
+  const releaseLeaseAndClose = (signal?: string) => {
+    if (closed) return;
+    closed = true;
+    const released = store.releaseLease(config.INDEXER_INSTANCE_ID);
+    stats.setLeaseActive(false);
+    store.close();
+    if (signal) {
+      log.info(`Shutting down (${signal})`, { released });
+      process.exit(0);
+    }
+  };
+
+  const ensureLease = async () => {
+    while (true) {
+      const now = Math.floor(Date.now() / 1000);
+      if (now <= leaseExpiry - config.LEASE_RENEW_GRACE_SECONDS) {
+        return true;
+      }
+
+      const claimed = store.claimLease(config.INDEXER_INSTANCE_ID, config.LEASE_TTL_SECONDS, now);
+      if (claimed) {
+        leaseExpiry = now + config.LEASE_TTL_SECONDS;
+        stats.setLeaseActive(true);
+        if (lastLeaseHolder !== config.INDEXER_INSTANCE_ID) {
+          log.info("Acquired coordination lease", { instance: config.INDEXER_INSTANCE_ID, expiresAt: leaseExpiry });
+          lastLeaseHolder = config.INDEXER_INSTANCE_ID;
+        }
+        return true;
+      }
+
+      const lease = store.getLeaseState();
+      stats.setLeaseActive(false);
+      const holder = lease.holder ?? "unknown";
+      if (holder !== lastLeaseHolder) {
+        log.warn("Lease currently held by another instance", lease);
+        await sendAlert("Indexer lease unavailable", { lease });
+        lastLeaseHolder = holder;
+      }
+      await sleep(config.LEASE_RETRY_MS);
+    }
+  };
+
+  ["SIGINT", "SIGTERM"].forEach((signal) => {
+    process.once(signal, () => releaseLeaseAndClose(signal));
+  });
 
   log.info("Indexer booted", {
     oracle: config.ORACLE_ADDRESS,
@@ -48,8 +99,11 @@ async function runIndexer() {
     scale: config.SUBMISSION_SCALE,
   });
 
-  while (true) {
-    try {
+  try {
+    while (true) {
+      try {
+        await ensureLease();
+
       const lightwalletdTxs = await fetchWithRetries(() =>
         lightwalletd.fetchRecentTransactions(cursor, config.WALLETD_Z_ADDRS),
       );
@@ -82,7 +136,7 @@ async function runIndexer() {
           const response = await fetchWithRetries(() => oracle.submitData(encrypted));
           await response.wait();
 
-          store.markProcessed(tx.txid);
+          store.markProcessed(tx.txid, tx.blockTime);
           cursor = Math.max(cursor, tx.blockTime);
           stats.incrementSubmitted();
           log.debug("Submitted encrypted estimate", {
@@ -93,17 +147,24 @@ async function runIndexer() {
         }
 
         store.setCursor(cursor);
+        const purged = store.purgeProcessedOlderThan(config.PROCESSED_RETENTION_SECONDS);
+        if (purged > 0) {
+          log.info("Trimmed processed transaction log", { purged });
+        }
         log.info("Batch submitted", { cursor });
       } else {
         log.info("No new shielded txs found");
       }
-    } catch (error) {
-      log.error("Indexer loop iteration failed", { error });
-      await sendAlert("Indexer loop error", { error: (error as Error).message });
-    }
+      } catch (error) {
+        log.error("Indexer loop iteration failed", { error });
+        await sendAlert("Indexer loop error", { error: (error as Error).message });
+      }
 
-    stats.incrementIterations();
-    await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
+      stats.incrementIterations();
+      await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
+    }
+  } finally {
+    releaseLeaseAndClose();
   }
 }
 

@@ -52,12 +52,18 @@ pnpm cli cursor
 | `ZCASHD_RPC_USER/PASSWORD` | Credentials for the optional fallback RPC                 |
 | `STATE_DB_PATH`        | Path to the SQLite database storing cursor and processed txs  |
 | `METRICS_PORT`         | Port for the Prometheus metrics server                        |
+| `INDEXER_INSTANCE_ID`  | Unique identifier for this replica (used for lease ownership) |
+| `LEASE_TTL_SECONDS`    | Coordination lease lifetime before another replica may take over |
+| `LEASE_RENEW_GRACE_SECONDS` | Renew the lease when this many seconds remain           |
+| `LEASE_RETRY_MS`       | Delay between lease acquisition attempts                      |
+| `PROCESSED_RETENTION_SECONDS` | How long to retain processed tx ids for dedupe       |
+| `ALERT_WEBHOOK_URL`    | Slack/Mattermost webhook for errors + lease contention alerts |
 
 ### Notes
 
 - Regenerate the gRPC client from `CONTEXT/lightwallet-protocol/walletrpc` if the proto definitions change.
 - Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
-- Replace the SQLite store with a clustered database (e.g., PostgreSQL) if multiple indexer replicas are needed.
+- SQLite ships a coordination lease; if you deploy multiple replicas make sure each has a distinct `INDEXER_INSTANCE_ID`.
 - Scrape `/metrics` from `METRICS_PORT` with Prometheus (see `monitoring/README.md` for sample config + dashboards).
 - Configure `ALERT_WEBHOOK_URL` to forward critical errors to Slack/Mattermost.
 - Use `pnpm watch:zcash` alongside the main indexer to surface upstream `zcashd` issues quickly.

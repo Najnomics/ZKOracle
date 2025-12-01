@@ -1,8 +1,8 @@
-# ZKOracle - Private Zcash Analytics Oracle
+# ZKOracle — Private Zcash Analytics Oracle
 
 **Track:** Zcash Data & Analytics ($3,000)  
 **Hackathon:** ZYPHERPUNK x Fhenix  
-**Build Time:** 1 day (6-8 hours)
+**Build Time:** 1 day (6–8 hours)
 
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-blue)](https://soliditylang.org/)
 [![Fhenix](https://img.shields.io/badge/Fhenix-FHE-purple)](https://fhenix.zone/)
@@ -12,21 +12,39 @@
 
 ## 📋 Table of Contents
 
-1. [The Problem](#the-problem)
-2. [The Solution](#the-solution)
-3. [How It Works](#how-it-works)
-4. [Architecture](#architecture)
-5. [Technical Implementation](#technical-implementation)
-6. [Getting Started](#getting-started)
-7. [Usage Examples](#usage-examples)
-8. [Privacy Analysis](#privacy-analysis)
-9. [Testing](#testing)
-10. [Deployment](#deployment)
-11. [API Reference](#api-reference)
+1. [Overview](#-overview)
+2. [Problem Statement](#-problem-statement)
+3. [Solution](#-solution)
+4. [Architecture & Data Flow](#-architecture--data-flow)
+5. [Technical Implementation](#-technical-implementation)
+6. [Getting Started](#-getting-started)
+7. [Usage Examples](#-usage-examples)
+8. [Privacy Analysis](#-privacy-analysis)
+9. [Monitoring & Operations](#-monitoring--operations)
+10. [Testing](#-testing)
+11. [Deployment](#-deployment)
+12. [API Reference](#-api-reference)
+13. [Reference Docs](#-reference-docs-available-in-context)
+14. [Why This Project Wins](#-why-this-wins)
+15. [License](#-license)
+16. [Contributing](#-contributing)
+17. [Contact & Support](#-contact--support)
 
 ---
 
-## 🎯 The Problem
+## 🧭 Overview
+
+ZKOracle is an end-to-end, privacy-preserving price oracle for Zcash. It pairs a Fhenix smart contract (written in Solidity with FHE primitives) with a TypeScript-based Zcash indexer and monitoring toolchain. The goal: unlock the $3.5B+ locked in Zcash’s shielded pool for DeFi, without ever revealing individual transaction amounts or participant identities.  
+
+Key components:
+
+- **FHE-powered on-chain aggregation** (`contracts/ZKOracle.sol`): accumulates encrypted amounts, produces a public TWAP, and exposes health APIs.
+- **Off-chain Zcash indexer** (`indexer/src/indexer.ts`): consumes shielded mempool data, estimates per‑tx volumes, encrypts via `fhenixjs`, and submits to the contract.
+- **Monitoring & ops**: Prometheus/Grafana dashboards, webhook alerts, a Zcash RPC watcher, and a docker-compose stack with `zcashd`, lightwalletd, the indexer, and observability baked in.
+
+---
+
+## 🎯 Problem Statement
 
 ### Zcash's Privacy Creates a Data Paradox
 
@@ -91,9 +109,9 @@ Result: DeFi protocols can't use Zcash data!
 
 ---
 
-## 💡 The Solution: ZKOracle
+## ✅ Solution
 
-**Private aggregation of Zcash data using Fully Homomorphic Encryption (FHE)**
+ZKOracle pairs a Fhenix-powered smart contract with a resilient Zcash data pipeline to publish privacy-preserving ZEC price feeds. The smart contract performs all math over ciphertexts using FHE, while the off-chain indexer estimates shielded amounts via statistical models, encrypts them with `fhenixjs`, and submits to the chain. The result is a transparent, auditable TWAP that never discloses individual user information.
 
 ### Key Innovation
 
@@ -170,7 +188,7 @@ Individual amounts NEVER revealed!
 
 ---
 
-## 🔧 How It Works
+## 🏗️ Architecture & Data Flow
 
 ### System Architecture
 
@@ -347,8 +365,6 @@ DeFi protocols can now use 5.337 ZEC price!
 ```
 
 ---
-
-## 📊 Architecture Diagrams
 
 ### Component Interaction
 
@@ -1006,6 +1022,17 @@ With 100+ transactions aggregated:
 
 Conclusion: Privacy preserved!
 ```
+
+---
+
+## 🛰️ Monitoring & Operations
+
+- **Prometheus + Grafana**: `indexer/monitoring/` ships a ready-to-scrape Prometheus config and a starter Grafana dashboard. Point Prometheus at `http://localhost:9464/metrics` (or your deployed host) to track submission rates and loop iterations.
+- **Webhook alerts**: set `ALERT_WEBHOOK_URL` in `indexer/.env` to forward critical errors (failed submissions, watcher faults, backlog build-up) to Slack/Mattermost. The main indexer and the Zcash watcher both use the same hook.
+- **Zcash watcher**: run `pnpm watch:zcash` to execute `src/tools/zcashWatcher.ts`, which polls `zcashd` directly and raises alerts if no shielded activity is detected for a configurable interval.
+- **Smoke tests**: `scripts/smoke-test.sh` spins up the docker-compose stack (zcashd + lightwalletd + indexer + Prometheus), waits for readiness, hits `/metrics`, and tails logs—ideal for CI or release gating.
+- **Structured logging**: the indexer uses `winston` with JSON output so logs can be shipped to any SIEM or centralized logging platform without modification.
+- **Lease-aware failover**: each replica sets `INDEXER_INSTANCE_ID`; the SQLite coordination lease guarantees only one active submitter at a time and exports `zkoracle_lease_active` so dashboards/alerts can track leadership changes.
 
 ---
 

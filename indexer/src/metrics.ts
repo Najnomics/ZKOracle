@@ -1,4 +1,4 @@
-import { Counter, Registry } from "prom-client";
+import { Counter, Gauge, Registry } from "prom-client";
 import express from "express";
 import type { Request, Response } from "express";
 
@@ -18,6 +18,11 @@ const iterationCounter = new Counter({
   help: "Number of indexer loop iterations",
   registers: [register],
 });
+const leaseGauge = new Gauge({
+  name: "zkoracle_lease_active",
+  help: "1 when this instance holds the coordination lease",
+  registers: [register],
+});
 
 export const stats = {
   incrementSubmitted() {
@@ -25,6 +30,9 @@ export const stats = {
   },
   incrementIterations() {
     iterationCounter.inc();
+  },
+  setLeaseActive(active: boolean) {
+    leaseGauge.set(active ? 1 : 0);
   },
 };
 
