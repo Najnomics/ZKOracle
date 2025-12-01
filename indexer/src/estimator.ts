@@ -1,22 +1,25 @@
 import { ShieldedTxMetadata } from "./clients/lightwalletd.js";
 
-const MAX_HISTORY = 256;
+const WINDOW = 50;
+const alpha = 0.6;
+let weightedAverage = 75_000;
+const history: number[] = [];
 
-export class HeuristicEstimator {
-  private history: number[] = [];
-
-  estimate(tx: ShieldedTxMetadata): number {
-    const base = 50_000 + Math.sin(tx.blockTime / 900) * 20_000;
-    const smoothing = this.history.length
-      ? this.history.reduce((sum, value) => sum + value, 0) / this.history.length
-      : base;
-
-    const estimate = Math.max(1, Math.round((base + smoothing) / 2));
-    this.history.push(estimate);
-    if (this.history.length > MAX_HISTORY) {
-      this.history.shift();
-    }
-    return estimate;
+export function computeShieldedEstimate(tx: ShieldedTxMetadata): number {
+  const timingComponent = Math.sin(tx.blockTime / 600) * 15_000 + 50_000;
+  if (history.length) {
+    const recentAverage = history.reduce((acc, value) => acc + value, 0) / history.length;
+    weightedAverage = alpha * timingComponent + (1 - alpha) * recentAverage;
+  } else {
+    weightedAverage = timingComponent;
   }
+
+  const rounded = Math.max(1, Math.round(weightedAverage));
+  history.push(rounded);
+  if (history.length > WINDOW) {
+    history.shift();
+  }
+
+  return rounded;
 }
 

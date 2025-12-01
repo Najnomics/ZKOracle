@@ -5,8 +5,8 @@ import { LightwalletdClient } from "./clients/lightwalletd.js";
 import { ZcashRpcClient } from "./clients/zcashRpc.js";
 import { loadConfig } from "./config.js";
 import { log } from "./logger.js";
-import { HeuristicEstimator } from "./estimator.js";
 import { appendTx, loadState, saveState } from "./store.js";
+import { computeShieldedEstimate } from "./estimator.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
@@ -38,7 +38,6 @@ async function runIndexer() {
           config.ZCASHD_RPC_PASSWORD,
         )
       : undefined;
-  const estimator = new HeuristicEstimator();
   let state = await loadState(config.STATE_FILE);
   const processedTxs = new Set<string>(state.processedTxIds);
   let cursor = state.cursor;
@@ -73,7 +72,7 @@ async function runIndexer() {
         log.info("Submitting batch", { batchSize: batch.length });
 
         for (const tx of batch) {
-          const estimate = estimator.estimate(tx);
+          const estimate = computeShieldedEstimate(tx);
           const scaled = Math.min(estimate * config.SUBMISSION_SCALE, 2 ** 32 - 1);
 
           const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
