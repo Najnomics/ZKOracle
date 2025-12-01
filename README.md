@@ -868,11 +868,12 @@ npx hardhat verify --network fhenixTestnet DEPLOYED_ADDRESS
 ### Run Indexer
 
 ```bash
-# Start indexer service
-node indexer/start.js
+cd indexer
+pnpm install
+pnpm start # runs the lease-aware indexer + auto-finalizer
 
-# Or with PM2 for production
-pm2 start indexer/start.js --name zkoracle-indexer
+# Optional: keep it alive with PM2/systemd
+pm2 start pnpm --name zkoracle-indexer -- start
 ```
 
 ---

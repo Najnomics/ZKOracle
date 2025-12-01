@@ -12,6 +12,7 @@ import { fetchWithRetries } from "./utils/retry.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
+  "function finalizePeriod() external",
   "function periodDuration() view returns (uint256)",
   "function periodStart() view returns (uint256)",
 ] as const;
@@ -88,6 +89,32 @@ async function runIndexer() {
       await sleep(config.LEASE_RETRY_MS);
     }
   };
+  const maybeFinalizePeriod = async () => {
+    const [start, duration] = await Promise.all([oracle.periodStart(), oracle.periodDuration()]);
+    const latestBlock = await provider.getBlock("latest");
+    if (!latestBlock) return;
+    const deadline = Number(start) + Number(duration);
+    if (latestBlock.timestamp < deadline) {
+      return;
+    }
+
+    try {
+      const tx = await fetchWithRetries(() => oracle.finalizePeriod());
+      await tx.wait();
+      log.info("Finalized oracle period", { deadline, timestamp: latestBlock.timestamp });
+    } catch (error) {
+      const message = (error as Error).message || "";
+      if (message.includes("OracleNoSamples")) {
+        log.info("Skipped finalize (no samples)", { deadline });
+      } else if (message.includes("OraclePeriodActive")) {
+        log.debug("Finalize not ready yet despite deadline check");
+      } else {
+        log.error("Failed to finalize oracle period", { error: message });
+        await sendAlert("Finalize period failed", { error: message });
+      }
+    }
+  };
+
 
   ["SIGINT", "SIGTERM"].forEach((signal) => {
     process.once(signal, () => releaseLeaseAndClose(signal));
@@ -159,6 +186,8 @@ async function runIndexer() {
         log.error("Indexer loop iteration failed", { error });
         await sendAlert("Indexer loop error", { error: (error as Error).message });
       }
+
+      await maybeFinalizePeriod();
 
       stats.incrementIterations();
       await new Promise((resolve) => setTimeout(resolve, config.POLL_INTERVAL_MS));
