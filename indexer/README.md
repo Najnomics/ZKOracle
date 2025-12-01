@@ -24,6 +24,12 @@ cd indexer
 pnpm install
 cp config/example.env .env
 pnpm start
+
+# run unit tests
+pnpm test
+
+# use CLI helpers
+pnpm cli cursor
 ```
 
 ### Environment Variables
@@ -48,6 +54,7 @@ pnpm start
 - Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
 - Replace the SQLite store with a clustered database (e.g., PostgreSQL) if multiple indexer replicas are needed.
 - Scrape `/metrics` from `METRICS_PORT` with Prometheus (or any OpenMetrics compatible collector) for alerting.
+- Extend the Vitest test suite (`pnpm test`) as new modules are introduced to keep coverage high.
 - Metrics/alerting hooks should be wired into the polling loop (`log.info`) for observability.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.

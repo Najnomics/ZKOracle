@@ -31,3 +31,8 @@ export function computeShieldedEstimate(tx: ShieldedTxMetadata): number {
   return estimate;
 }
 
+export function resetEstimatorState(): void {
+  history.length = 0;
+  ewma = 90_000;
+}
+

@@ -49,5 +49,10 @@ export class SqliteStateStore {
     const row = this.db.prepare("SELECT 1 FROM processed_txs WHERE txid = ?").get(txid);
     return !!row;
   }
+
+  getProcessedCount(): number {
+    const row = this.db.prepare("SELECT COUNT(*) as count FROM processed_txs").get() as { count: number };
+    return row.count;
+  }
 }
 
