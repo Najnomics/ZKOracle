@@ -473,6 +473,10 @@ With 100+ transactions:
 
 ## 💻 Technical Implementation
 
+> **Foundry reference implementation:** All current contracts and tests live under `contracts/` (see
+> `contracts/src/ZKOracle.sol` and `contracts/test/ZKOracle.t.sol`). Run `pnpm install && forge test` from that directory
+> to compile against the Fhenix toolkit and execute the CoFHE-aware Foundry test suite.
+
 ### Smart Contract (Core)
 
 ```solidity
@@ -749,6 +753,9 @@ const indexer = new ZcashIndexer(
 indexer.runAggregation().catch(console.error);
 ```
 
+> A typed skeleton of this service now lives in `indexer/`. Use it as the starting point for productionizing the off-chain
+> flow (see `indexer/README.md` and `indexer/config/example.env` for wiring details).
+
 ---
 
 ## 🚀 Getting Started
@@ -801,6 +808,29 @@ AGGREGATION_PERIOD=3600        # 1 hour in seconds
 MIN_CONFIDENCE=70              # Minimum confidence to publish
 BATCH_SIZE=10                  # Transactions per batch
 ```
+
+### Fhenix Nitrogen Network Settings
+
+Use the public Nitrogen testnet endpoints documented in `CONTEXT/fhenix-docs`:
+
+| Purpose        | Value                                 |
+|----------------|----------------------------------------|
+| Chain name     | `Fhenix Nitrogen`                      |
+| Chain ID       | `8008148`                              |
+| JSON-RPC HTTPS | `https://api.nitrogen.fhenix.zone`     |
+| Websocket      | `wss://api.nitrogen.fhenix.zone:8548`  |
+| Explorer       | `https://explorer.nitrogen.fhenix.zone`|
+| Bridge         | `https://bridge.nitrogen.fhenix.zone`  |
+
+Add the network to MetaMask (Add Network → Add manually) and use the Discord faucet or Sepolia bridge to source FHE test tokens before deploying/contracts interactions.
+
+### Zcash Data Backends
+
+Per the official docs (`CONTEXT/zcash`, `CONTEXT/lightwalletd`):
+
+- Run a `zcashd` node with `txindex=1`, `lightwalletd=1`, and RPC creds.
+- Point a local `lightwalletd` instance at that node to expose a lightweight, mobile-friendly RPC surface for the indexer.
+- Alternatively, reference the translated guides in `CONTEXT/zcash-docs` for remote RPC access when a full node is unavailable.
 
 ### Deploy Contracts
 
@@ -988,6 +1018,9 @@ npm run test:integration
 
 # Coverage
 npm run test:coverage
+
+# Foundry (contracts/)
+cd contracts && pnpm install && forge test
 ```
 
 ### Test Suite
@@ -1039,6 +1072,8 @@ describe("ZKOracle", function () {
   });
 });
 ```
+
+> **CoFHE compliance:** All encrypted path tests should be written with `CoFheTest` helpers (see `CONTEXT/cofhe-docs`) so that CI can generate mock encrypted inputs matching the latest Fhenix guidelines.
 
 ---
 
@@ -1126,6 +1161,14 @@ Check if price is recent enough.
 - **Gas:** ~2k (view)
 
 ---
+
+## 📚 Reference Docs Available in `CONTEXT/`
+
+- `zcash/`, `zcash-docs/`, `zips/`, `zip32/`, `protocol.z.cash/`, `zcash_spec/`, `lightwalletd/`, `lightwallet-protocol/`, `zcash-explorer/` – canonical protocol specs, RPC references, explorer backends, and light client tooling.
+- `fhenix-docs/` – Nitrogen network configuration, Solidity FHE API, tooling guides, and tutorials.
+- `cofhe-docs/` – CoFHE testing requirements, SDK notes, and mock harness instructions.
+
+Use these repositories for deeper implementation questions without needing an internet connection.
 
 ## 🎯 Why This Wins
 
