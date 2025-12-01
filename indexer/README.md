@@ -39,13 +39,15 @@ pnpm start
 | `LIGHTWALLETD_ENDPOINT`| URL to a Lightwalletd instance                                 |
 | `ZCASHD_RPC_URL`       | Optional fallback `zcashd` RPC endpoint                        |
 | `ZCASHD_RPC_USER/PASSWORD` | Credentials for the optional fallback RPC                 |
-| `STATE_FILE`           | Path to JSON file storing cursor + processed TX IDs           |
+| `STATE_DB_PATH`        | Path to the SQLite database storing cursor and processed txs  |
+| `METRICS_PORT`         | Port for the Prometheus metrics server                        |
 
 ### Notes
 
 - Replace `lightwalletd.ts` with a generated gRPC client using the files under `CONTEXT/lightwallet-protocol/walletrpc`.
 - Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
-- Replace the file-based store with a durable database (SQLite, Redis, DynamoDB, etc.) for production usage.
+- Replace the SQLite store with a clustered database (e.g., PostgreSQL) if multiple indexer replicas are needed.
+- Scrape `/metrics` from `METRICS_PORT` with Prometheus (or any OpenMetrics compatible collector) for alerting.
 - Metrics/alerting hooks should be wired into the polling loop (`log.info`) for observability.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.

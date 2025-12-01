@@ -5,9 +5,9 @@ import { LightwalletdClient } from "./clients/lightwalletd.js";
 import { ZcashRpcClient } from "./clients/zcashRpc.js";
 import { loadConfig } from "./config.js";
 import { log } from "./logger.js";
-import { appendTx, loadState, saveState } from "./store.js";
+import { SqliteStateStore } from "./persistence/sqliteStore.js";
 import { computeShieldedEstimate } from "./estimator.js";
-import { stats } from "./metrics.js";
+import { startMetricsServer, stats } from "./metrics.js";
 
 const ORACLE_ABI = [
   "function submitData(bytes encryptedAmount) external",
@@ -25,6 +25,8 @@ class ZcashEstimator {
 
 async function runIndexer() {
   const config = loadConfig();
+  startMetricsServer(config.METRICS_PORT);
+
   const provider = new ethers.JsonRpcProvider(config.FHENIX_RPC_URL);
   const wallet = new ethers.Wallet(config.INDEXER_PRIVATE_KEY, provider);
   const oracle = new ethers.Contract(config.ORACLE_ADDRESS, ORACLE_ABI, wallet);
@@ -39,9 +41,8 @@ async function runIndexer() {
           config.ZCASHD_RPC_PASSWORD,
         )
       : undefined;
-  let state = await loadState(config.STATE_FILE);
-  const processedTxs = new Set<string>(state.processedTxIds);
-  let cursor = state.cursor;
+  const store = new SqliteStateStore(config.STATE_DB_PATH);
+  let cursor = store.getCursor();
 
   log.info("Indexer booted", {
     oracle: config.ORACLE_ADDRESS,
@@ -56,12 +57,12 @@ async function runIndexer() {
         lightwalletd.fetchRecentTransactions(cursor),
       ]);
 
-      const txs = lightwalletdTxs.filter((tx) => !processedTxs.has(tx.txid));
+      const txs = lightwalletdTxs.filter((tx) => !store.hasProcessed(tx.txid));
       if (zcashd && txs.length === 0) {
         // Optionally fall back to zcashd RPC if lightwalletd yields nothing.
         const supplemental = await zcashd.listReceivedByAddress("shielded-address-placeholder");
         supplemental.forEach((tx) => {
-          if (!processedTxs.has(tx.txid)) {
+          if (!store.hasProcessed(tx.txid)) {
             txs.push({ txid: tx.txid, blockTime: tx.timestamp, pool: "sapling" });
           }
         });
@@ -79,15 +80,13 @@ async function runIndexer() {
           const response = await oracle.submitData(encrypted);
           await response.wait();
 
-          processedTxs.add(tx.txid);
+          store.markProcessed(tx.txid);
           cursor = Math.max(cursor, tx.blockTime);
-          state = appendTx(state, tx.txid);
           stats.incrementSubmitted();
         }
 
-        state.cursor = cursor;
-        await saveState(config.STATE_FILE, state);
-        log.info("Batch submitted", { totalSubmitted: stats.submitted, cursor });
+        store.setCursor(cursor);
+        log.info("Batch submitted", { cursor });
       } else {
         log.info("No new shielded txs found");
       }
