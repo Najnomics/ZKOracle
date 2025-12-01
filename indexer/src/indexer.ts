@@ -32,7 +32,10 @@ async function runIndexer() {
   const oracle = new ethers.Contract(config.ORACLE_ADDRESS, ORACLE_ABI, wallet);
   const fhe = new FhenixClient({ provider: provider as any });
 
-  const lightwalletd = new LightwalletdClient(config.LIGHTWALLETD_ENDPOINT);
+  const lightwalletd = new LightwalletdClient(
+    config.LIGHTWALLETD_ENDPOINT,
+    config.LIGHTWALLETD_USE_TLS,
+  );
   const zcashd =
     config.ZCASHD_RPC_URL && config.ZCASHD_RPC_USER && config.ZCASHD_RPC_PASSWORD
       ? new ZcashRpcClient(
@@ -54,7 +57,7 @@ async function runIndexer() {
   while (true) {
     try {
       const [lightwalletdTxs] = await Promise.all([
-        lightwalletd.fetchRecentTransactions(cursor),
+        lightwalletd.fetchRecentTransactions(cursor, config.WALLETD_Z_ADDRS),
       ]);
 
       const txs = lightwalletdTxs.filter((tx) => !store.hasProcessed(tx.txid));

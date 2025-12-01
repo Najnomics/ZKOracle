@@ -26,24 +26,31 @@ export interface ShieldedTxMetadata {
 export class LightwalletdClient {
   private readonly client: any;
 
-  constructor(endpoint: string) {
-    this.client = new WalletGrpc(endpoint, credentials.createInsecure());
+  constructor(endpoint: string, useTls: boolean) {
+    const channelCredentials = useTls ? credentials.createSsl() : credentials.createInsecure();
+    this.client = new WalletGrpc(endpoint, channelCredentials);
   }
 
-  async fetchRecentTransactions(since: number): Promise<ShieldedTxMetadata[]> {
-    const request = { start_time: since };
+  async fetchRecentTransactions(since: number, addresses: string[]): Promise<ShieldedTxMetadata[]> {
+    const request = {
+      start_time: since,
+      zaddrs: addresses,
+    };
 
     return new Promise((resolve, reject) => {
-      this.client.GetMempoolTx({ filter: request }, (err: Error | null, response: any) => {
-        if (err) return reject(err);
-        const txs =
-          response?.transactions?.map((tx: any) => ({
-            txid: tx.txid,
-            blockTime: Number(tx.expiryHeight ?? Date.now() / 1000),
-            pool: "sapling",
-          })) ?? [];
-        resolve(txs);
+      const txs: ShieldedTxMetadata[] = [];
+      const stream = this.client.GetMempoolTxStream(request);
+
+      stream.on("data", (tx: any) => {
+        txs.push({
+          txid: tx.txid,
+          blockTime: Number(tx.blockTime ?? Date.now() / 1000),
+          pool: "sapling",
+        });
       });
+
+      stream.on("end", () => resolve(txs));
+      stream.on("error", (err: Error) => reject(err));
     });
   }
 }

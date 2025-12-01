@@ -9,7 +9,12 @@ const schema = z.object({
   SUBMISSION_SCALE: z.coerce.number().positive().default(10_000),
   MAX_BATCH_SIZE: z.coerce.number().positive().max(512).default(32),
   POLL_INTERVAL_MS: z.coerce.number().min(5_000).default(15_000),
-  LIGHTWALLETD_ENDPOINT: z.string().url(),
+  LIGHTWALLETD_ENDPOINT: z.string(),
+  LIGHTWALLETD_USE_TLS: z.coerce.boolean().default(false),
+  WALLETD_Z_ADDRS: z
+    .string()
+    .transform((value) => value.split(",").map((addr) => addr.trim()))
+    .default(""),
   STATE_DB_PATH: z.string().default("./data/indexer.db"),
   METRICS_PORT: z.coerce.number().default(9464),
   ZCASHD_RPC_URL: z.string().url().optional(),
