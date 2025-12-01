@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  zcashd:
+    image: electriccoinco/zcashd:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/zcashd:/home/zcash/.zcash
+    command: >
+      zcashd
+      -txindex=1
+      -experimentalfeatures=1
+      -lightwalletd=1
+      -rpcuser=${ZCASHD_RPC_USER}
+      -rpcpassword=${ZCASHD_RPC_PASSWORD}
+
+  lightwalletd:
+    image: electriccoinco/lightwalletd:latest
+    restart: unless-stopped
+    depends_on:
+      - zcashd
+    environment:
+      - ZCASHD_IP=zcashd
+    command: >
+      lightwalletd
+      --zcash-conf-path=/home/zcash/.zcash/zcash.conf
+    ports:
+      - "9067:9067"
+
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - lightwalletd
+    environment:
+      - FHENIX_RPC_URL=${FHENIX_RPC_URL}
+      - ORACLE_ADDRESS=${ORACLE_ADDRESS}
+      - INDEXER_PRIVATE_KEY=${INDEXER_PRIVATE_KEY}
+      - LIGHTWALLETD_ENDPOINT=http://lightwalletd:9067
+      - LIGHTWALLETD_USE_TLS=false
+      - ZCASHD_RPC_URL=http://zcashd:8232
+      - ZCASHD_RPC_USER=${ZCASHD_RPC_USER}
+      - ZCASHD_RPC_PASSWORD=${ZCASHD_RPC_PASSWORD}
+      - STATE_DB_PATH=/app/data/indexer.db
+      - METRICS_PORT=9464
+    volumes:
+      - ./data/indexer:/app/data
+    ports:
+      - "9464:9464"
+

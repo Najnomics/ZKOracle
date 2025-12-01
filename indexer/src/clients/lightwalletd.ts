@@ -14,7 +14,19 @@ const packageDefinition = loadSync(PROTO_PATH, {
   oneofs: true,
 });
 
-const protoDescriptor = loadPackageDefinition(packageDefinition) as any;
+type LightwalletdPackage = {
+  walletrpc: {
+    CompactTxStreamer: new (endpoint: string, creds: ReturnType<typeof credentials.createInsecure>) => {
+      GetMempoolTxStream(request: { start_time: number; zaddrs: string[] }): {
+        on(event: "data", handler: (tx: { txid: string; blockTime?: number }) => void): void;
+        on(event: "end", handler: () => void): void;
+        on(event: "error", handler: (error: Error) => void): void;
+      };
+    };
+  };
+};
+
+const protoDescriptor = loadPackageDefinition(packageDefinition) as LightwalletdPackage;
 const WalletGrpc = protoDescriptor.walletrpc.CompactTxStreamer;
 
 export interface ShieldedTxMetadata {
@@ -24,7 +36,7 @@ export interface ShieldedTxMetadata {
 }
 
 export class LightwalletdClient {
-  private readonly client: any;
+  private readonly client: InstanceType<LightwalletdPackage["walletrpc"]["CompactTxStreamer"]>;
 
   constructor(endpoint: string, useTls: boolean) {
     const channelCredentials = useTls ? credentials.createSsl() : credentials.createInsecure();
@@ -41,7 +53,7 @@ export class LightwalletdClient {
       const txs: ShieldedTxMetadata[] = [];
       const stream = this.client.GetMempoolTxStream(request);
 
-      stream.on("data", (tx: any) => {
+      stream.on("data", (tx) => {
         txs.push({
           txid: tx.txid,
           blockTime: Number(tx.blockTime ?? Date.now() / 1000),

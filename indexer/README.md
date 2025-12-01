@@ -10,7 +10,7 @@ This folder tracks the off-chain service that:
 ## Directory Layout
 
 - `src/indexer.ts` – Orchestrator that polls Zcash data, encrypts values with `fhenix.js`, and calls the oracle.
-- `src/clients/lightwalletd.ts` – lightweight client stub (replace with a gRPC client derived from `CONTEXT/lightwallet-protocol/walletrpc`).
+- `src/clients/lightwalletd.ts` – gRPC client streaming shielded txs via CompactTxStreamer.
 - `src/clients/zcashRpc.ts` – optional fallback client that hits `zcashd` directly via JSON-RPC.
 - `src/config.ts` – shared configuration loader/validation built with `zod`.
 - `src/store.ts` – file-based persistence for cursors and processed tx IDs (defaults to `./data/state.json`).
@@ -24,6 +24,9 @@ cd indexer
 pnpm install
 cp config/example.env .env
 pnpm start
+
+# dockerized stack (zcashd + lightwalletd + indexer)
+docker compose up -d
 
 # run unit tests
 pnpm test
@@ -50,7 +53,7 @@ pnpm cli cursor
 
 ### Notes
 
-- Replace `lightwalletd.ts` with a generated gRPC client using the files under `CONTEXT/lightwallet-protocol/walletrpc`.
+- Regenerate the gRPC client from `CONTEXT/lightwallet-protocol/walletrpc` if the proto definitions change.
 - Implement the statistical estimator in `src/estimator.ts` using the heuristics documented in `ZCASH_ECOSYSTEM_STUDY.md`.
 - Replace the SQLite store with a clustered database (e.g., PostgreSQL) if multiple indexer replicas are needed.
 - Scrape `/metrics` from `METRICS_PORT` with Prometheus (or any OpenMetrics compatible collector) for alerting.

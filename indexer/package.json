@@ -6,7 +6,7 @@
   "scripts": {
     "start": "tsx src/indexer.ts",
     "cli": "tsx src/cli.ts",
-    "lint": "eslint src --ext .ts",
+    "lint": "pnpm dlx eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest watch"
@@ -28,6 +28,7 @@
     "@types/better-sqlite3": "^7.6.7",
     "tsx": "^4.19.2",
     "typescript": "^5.4.5",
+    "typescript-eslint": "^8.15.0",
     "vitest": "^1.6.0"
   }
 }

@@ -16,14 +16,6 @@ const ORACLE_ABI = [
   "function periodStart() view returns (uint256)",
 ] as const;
 
-class ZcashEstimator {
-  estimateAmount(txTime: number): number {
-    // TODO: implement statistical estimator described in ZCASH_ECOSYSTEM_STUDY.md
-    const base = Math.sin(txTime / 600) * 50_000 + 75_000;
-    return Math.max(1, Math.floor(base + Math.random() * 5_000));
-  }
-}
-
 async function runIndexer() {
   const config = loadConfig();
   startMetricsServer(config.METRICS_PORT);
@@ -31,7 +23,7 @@ async function runIndexer() {
   const provider = new ethers.JsonRpcProvider(config.FHENIX_RPC_URL);
   const wallet = new ethers.Wallet(config.INDEXER_PRIVATE_KEY, provider);
   const oracle = new ethers.Contract(config.ORACLE_ADDRESS, ORACLE_ABI, wallet);
-  const fhe = new FhenixClient({ provider: provider as any });
+  const fhe = new FhenixClient({ provider: provider as unknown as typeof provider });
 
   const lightwalletd = new LightwalletdClient(
     config.LIGHTWALLETD_ENDPOINT,
@@ -54,7 +46,6 @@ async function runIndexer() {
     scale: config.SUBMISSION_SCALE,
   });
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const lightwalletdTxs = await fetchWithRetries(() =>
