@@ -75,7 +75,7 @@ async function runIndexer() {
         log.info("Submitting batch", { batchSize: batch.length });
 
         for (const tx of batch) {
-          const estimate = computeShieldedEstimate(tx);
+          const { amount: estimate, confidence } = computeShieldedEstimate(tx);
           const scaled = Math.min(estimate * config.SUBMISSION_SCALE, 2 ** 32 - 1);
 
           const encrypted = await fhe.encrypt(scaled, EncryptionTypes.uint32);
@@ -85,6 +85,11 @@ async function runIndexer() {
           store.markProcessed(tx.txid);
           cursor = Math.max(cursor, tx.blockTime);
           stats.incrementSubmitted();
+          log.debug("Submitted encrypted estimate", {
+            txid: tx.txid,
+            estimate,
+            confidence,
+          });
         }
 
         store.setCursor(cursor);
