@@ -903,14 +903,26 @@ Per the official docs (`CONTEXT/zcash`, `CONTEXT/lightwalletd`):
 ### Deploy Contracts
 
 ```bash
-# Compile
-npx hardhat compile
+cd contracts
+pnpm install
 
-# Deploy to Fhenix testnet
-npx hardhat run scripts/deploy.ts --network fhenixTestnet
+# configure environment (example values shown)
+cat <<'EOF' > .env
+PRIVATE_KEY=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+FHENIX_RPC_URL=https://api.nitrogen.fhenix.zone
+ORACLE_ADMIN=0x000000000000000000000000000000000000dead
+ORACLE_INDEXER=0x000000000000000000000000000000000000c0de
+ORACLE_PERIOD=3600
+ORACLE_MAX_SAMPLES=256
+ORACLE_SUBMISSION_SCALE=10000
+EOF
 
-# Verify
-npx hardhat verify --network fhenixTestnet DEPLOYED_ADDRESS
+# run the Foundry script (broadcast + verify on Fhenix)
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url $FHENIX_RPC_URL \
+  --broadcast \
+  --verify \
+  --slow
 ```
 
 ### Run Indexer
@@ -1184,43 +1196,13 @@ describe("ZKOracle", function () {
 
 ### Deployment Script
 
-```typescript
-// scripts/deploy.ts
-import { ethers } from "hardhat";
-
-async function main() {
-  console.log("Deploying ZKOracle...");
-
-  const [deployer, indexer] = await ethers.getSigners();
-  console.log("Deployer:", deployer.address);
-  console.log("Indexer:", indexer.address);
-
-  // Deploy ZKOracle
-  const ZKOracle = await ethers.getContractFactory("ZKOracle");
-  const oracle = await ZKOracle.deploy(indexer.address);
-  await oracle.deployed();
-
-  console.log("ZKOracle deployed to:", oracle.address);
-
-  // Save deployment info
-  const deployment = {
-    oracle: oracle.address,
-    indexer: indexer.address,
-    deployer: deployer.address,
-    network: (await ethers.provider.getNetwork()).name,
-    timestamp: new Date().toISOString()
-  };
-
-  require('fs').writeFileSync(
-    'deployment.json',
-    JSON.stringify(deployment, null, 2)
-  );
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+```bash
+# Foundry script (contracts/script/Deploy.s.sol)
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url $FHENIX_RPC_URL \
+  --broadcast \
+  --verify \
+  --slow
 ```
 
 ### Production Checklist
