@@ -926,6 +926,12 @@ pm2 start pnpm --name zkoracle-indexer -- start
 # Health & metrics
 curl http://localhost:9464/metrics
 curl http://localhost:9464/healthz | jq
+
+# Trigger a manual lease cutover (requires CUTOVER_SHARED_SECRET)
+curl -X POST http://localhost:9464/cutover \
+  -H "Content-Type: application/json" \
+  -H "x-cutover-token: $CUTOVER_SHARED_SECRET" \
+  -d '{"instanceId":"indexer-blue","requestedBy":"slash"}'
 ```
 
 ---
@@ -1087,6 +1093,7 @@ Conclusion: Privacy preserved!
 - **Structured logging**: the indexer uses `winston` with JSON output so logs can be shipped to any SIEM or centralized logging platform without modification.
 - **Lease-aware failover**: each replica sets `INDEXER_INSTANCE_ID`; the SQLite coordination lease guarantees only one active submitter at a time and exports `zkoracle_lease_active` so dashboards/alerts can track leadership changes.
 - **HTTP health probe**: the metrics server also exposes `GET /healthz`, returning the current cursor, lease holder, last loop/finalize timestamps, and the most recent error (if any) for k8s-style readiness checks.
+- **Slash-style cutovers**: `POST /cutover` (guarded by `CUTOVER_SHARED_SECRET`) lets an operator or Slack slash command release/claim the lease for a new `instanceId`, emitting a webhook alert so blue/green rollouts stay coordinated.
 
 ---
 

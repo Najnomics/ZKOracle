@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { ethers } from "ethers";
 import { FhenixClient, EncryptionTypes } from "fhenixjs";
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express-serve-static-core";
 import { LightwalletdClient } from "./clients/lightwalletd.js";
 import { ZcashRpcClient } from "./clients/zcashRpc.js";
 import { loadConfig } from "./config.js";
@@ -68,10 +69,71 @@ async function runIndexer() {
     lastLoopAt: Date.now(),
   };
 
-  startMetricsServer(config.METRICS_PORT, () => ({
-    ...health,
-    timestamp: Date.now(),
-  }));
+  const handleCutover = async (req: ExpressRequest, res: ExpressResponse) => {
+    if (!config.CUTOVER_SHARED_SECRET) {
+      res.status(403).json({ status: "disabled" });
+      return;
+    }
+    const tokenHeader = req.header("x-cutover-token") ?? req.header("authorization") ?? "";
+    const token = typeof req.body?.token === "string" ? req.body.token : tokenHeader;
+    if (!token || token.trim() !== config.CUTOVER_SHARED_SECRET) {
+      res.status(403).json({ status: "forbidden" });
+      return;
+    }
+    const requestedId =
+      typeof req.body?.instanceId === "string" && req.body.instanceId.trim().length > 0
+        ? req.body.instanceId.trim()
+        : config.INDEXER_INSTANCE_ID;
+
+    const leaseBefore = store.getLeaseState();
+    const released = leaseBefore.holder ? store.releaseLease(leaseBefore.holder) : true;
+    const now = Math.floor(Date.now() / 1000);
+    const claimed = store.claimLease(requestedId, config.LEASE_TTL_SECONDS, now);
+
+    if (claimed) {
+      health.leaseHolder = requestedId;
+      health.leaseExpiresAt = now + config.LEASE_TTL_SECONDS;
+      health.leaseActive = true;
+      await sendAlert("Indexer lease cutover executed", {
+        previousHolder: leaseBefore.holder,
+        newHolder: requestedId,
+        requestedBy: req.body?.requestedBy ?? "api",
+      });
+      log.warn("Lease cutover requested; new holder assigned", {
+        previousHolder: leaseBefore.holder,
+        newHolder: requestedId,
+      });
+      res.json({
+        status: "ok",
+        released,
+        claimed,
+        holder: health.leaseHolder,
+        expiresAt: health.leaseExpiresAt,
+      });
+    } else {
+      await sendAlert("Indexer lease cutover blocked (lease still active)", {
+        previousHolder: leaseBefore.holder,
+        expiresAt: leaseBefore.expiresAt,
+        requestedHolder: requestedId,
+      });
+      res.status(409).json({
+        status: "blocked",
+        released,
+        claimed,
+        holder: leaseBefore.holder,
+        expiresAt: leaseBefore.expiresAt,
+      });
+    }
+  };
+
+  startMetricsServer(
+    config.METRICS_PORT,
+    () => ({
+      ...health,
+      timestamp: Date.now(),
+    }),
+    { cutover: handleCutover },
+  );
 
   const releaseLeaseAndClose = (signal?: string) => {
     if (closed) return;

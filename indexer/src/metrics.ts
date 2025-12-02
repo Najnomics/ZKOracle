@@ -1,6 +1,7 @@
 import { Counter, Gauge, Registry } from "prom-client";
 import express from "express";
-import type { Request, Response } from "express-serve-static-core";
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express-serve-static-core";
+
 const register = new Registry();
 const submittedCounter = new Counter({
   name: "zkoracle_submissions_total",
@@ -32,15 +33,23 @@ export const stats = {
 
 export type HealthSupplier = () => Promise<Record<string, unknown>> | Record<string, unknown>;
 
-export function startMetricsServer(port = 9464, getHealth?: HealthSupplier) {
+export interface MetricsHandlers {
+  cutover?: (req: ExpressRequest, res: ExpressResponse) => Promise<void> | void;
+}
+
+export function startMetricsServer(port = 9464, getHealth?: HealthSupplier, handlers?: MetricsHandlers) {
   const app = express();
-  app.get("/metrics", async (_req: Request, res: Response) => {
+  if (handlers?.cutover) {
+    app.use(express.json({ limit: "32kb" }));
+  }
+
+  app.get("/metrics", async (_req: ExpressRequest, res: ExpressResponse) => {
     res.set("Content-Type", register.contentType);
     res.send(await register.metrics());
   });
 
   if (getHealth) {
-    app.get("/healthz", async (_req: Request, res: Response) => {
+    app.get("/healthz", async (_req: ExpressRequest, res: ExpressResponse) => {
       try {
         const payload = await getHealth();
         res.json({ status: "ok", ...payload });
@@ -50,8 +59,19 @@ export function startMetricsServer(port = 9464, getHealth?: HealthSupplier) {
     });
   }
 
+  if (handlers?.cutover) {
+    const cutoverHandler = handlers.cutover;
+    app.post("/cutover", async (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        await cutoverHandler(req, res);
+      } catch (error) {
+        res.status(500).json({ status: "error", error: (error as Error).message });
+      }
+    });
+  }
+
   app.listen(port, () => {
-    console.log(`[METRICS] listening on :${port} (metrics + healthz)`);
+    console.log(`[METRICS] listening on :${port} (metrics + healthz${handlers?.cutover ? " + cutover" : ""})`);
   });
 }
 

@@ -58,6 +58,7 @@ pnpm cli cursor
 | `LEASE_RETRY_MS`       | Delay between lease acquisition attempts                      |
 | `PROCESSED_RETENTION_SECONDS` | How long to retain processed tx ids for dedupe       |
 | `ALERT_WEBHOOK_URL`    | Slack/Mattermost webhook for errors + lease contention alerts |
+| `CUTOVER_SHARED_SECRET`| Shared token required to call the `/cutover` webhook endpoint |
 
 ### Notes
 
@@ -71,6 +72,7 @@ pnpm cli cursor
 - Extend the Vitest test suite (`pnpm test`) as new modules are introduced to keep coverage high.
 - Keep the alerting hooks in `logger.ts` wired into the polling loop (`log.info`) for runtime observability.
 - Every process exposes `GET /healthz` (served by the same Express app as `/metrics`) so you can plug the indexer into Kubernetes-style readiness checks or simple curl-based monitoring.
+- A privileged `POST /cutover` endpoint (requires `CUTOVER_SHARED_SECRET` via `x-cutover-token` or `Authorization` header) can release/claim the lease for a new `instanceId`, making Slack slash commands or runbook-driven failovers trivial.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.
 

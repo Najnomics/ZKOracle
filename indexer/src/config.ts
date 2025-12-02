@@ -32,6 +32,7 @@ const schema = z.object({
   LEASE_RENEW_GRACE_SECONDS: z.coerce.number().min(5).default(30),
   LEASE_RETRY_MS: z.coerce.number().min(1_000).default(5_000),
   PROCESSED_RETENTION_SECONDS: z.coerce.number().min(3_600).default(86_400),
+  CUTOVER_SHARED_SECRET: z.string().optional(),
 });
 
 type RawConfig = z.infer<typeof schema>;
