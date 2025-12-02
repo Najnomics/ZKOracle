@@ -656,6 +656,30 @@ contract ZKOracle {
 
 A Foundry integration suite (`test/ZKOracleIntegration.t.sol`) keeps the oracle + consumer flow covered end-to-end.
 
+ABI excerpt:
+
+```json
+[
+  { "inputs": [], "name": "latestPrice", "outputs": [
+      { "internalType": "uint256", "name": "price", "type": "uint256" },
+      { "internalType": "uint32", "name": "sampleSize", "type": "uint32" },
+      { "internalType": "uint256", "name": "updatedAt", "type": "uint256" },
+      { "internalType": "uint256", "name": "confidence", "type": "uint256" }
+    ], "stateMutability": "view", "type": "function" },
+  { "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+    "name": "quote", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view", "type": "function" }
+]
+```
+
+Usage example:
+
+```solidity
+OracleConsumer consumer = new OracleConsumer(ORACLE_ADDRESS, 1 days, 60, msg.sender);
+OracleConsumer.PriceInfo memory info = consumer.latestPrice();
+uint256 usdValue = consumer.quote(25_000); // 2.5 units (1e4 precision)
+```
+
 ### Indexer (Off-Chain)
 
 ```javascript

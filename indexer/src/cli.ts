@@ -12,6 +12,8 @@ Commands:
   reset-cursor     Reset cursor to current time (use with caution)
   lease            Show lease holder and expiry
   force-release    Release the lease for this instance id
+  doctor           Run cutover watchdog diagnostics
+  takeover <id>    Forcefully take the lease for a new instance id
 `;
 
 async function main() {
@@ -39,7 +41,7 @@ async function main() {
       case "lease":
         console.log("Lease state:", store.getLeaseState());
         break;
-      case "force-release":
+      case "force-release": {
         const released = store.releaseLease(config.INDEXER_INSTANCE_ID);
         console.log(
           released
@@ -47,6 +49,30 @@ async function main() {
             : "Lease not held by this instance; nothing changed.",
         );
         break;
+      }
+      case "doctor": {
+        const lease = store.getLeaseState();
+        console.log("Lease state:", lease);
+        console.log("Cursor:", store.getCursor());
+        console.log("Processed tx count:", store.getProcessedCount());
+        if (!lease.holder || (lease.expiresAt ?? 0) < Date.now() / 1000) {
+          console.log("Lease expired → safe to start taking over.");
+        } else {
+          console.log("Lease still active; consider contacting holder before takeover.");
+        }
+        break;
+      }
+      case "takeover": {
+        const newId = process.argv[3];
+        if (!newId) {
+          console.log("Usage: pnpm cli takeover <newInstanceId>");
+          break;
+        }
+        const now = Math.floor(Date.now() / 1000);
+        const success = store.claimLease(newId, config.LEASE_TTL_SECONDS, now);
+        console.log(success ? `Lease claimed by ${newId}` : "Failed to claim lease; still held by another instance.");
+        break;
+      }
       default:
         console.log(`Unknown command: ${command}`);
         console.log(usage);

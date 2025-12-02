@@ -56,6 +56,7 @@ async function runIndexer() {
     lastLoopAt: number;
     lastFinalizeAt?: number;
     lastError?: string;
+    submitting?: string;
   };
 
   const health: HealthState = {
@@ -202,6 +203,7 @@ async function runIndexer() {
           store.markProcessed(tx.txid, tx.blockTime);
           cursor = Math.max(cursor, tx.blockTime);
           stats.incrementSubmitted();
+          health.submitting = tx.txid;
           log.debug("Submitted encrypted estimate", {
             txid: tx.txid,
             estimate,
@@ -220,6 +222,7 @@ async function runIndexer() {
       }
       health.cursor = cursor;
       health.lastError = undefined;
+      health.submitting = undefined;
       } catch (error) {
         log.error("Indexer loop iteration failed", { error });
         health.lastError = (error as Error).message;

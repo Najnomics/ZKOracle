@@ -49,7 +49,7 @@ contract ZKOracle is Ownable {
     bool public submissionsPaused;
 
     /// @dev Scaling factor applied by the indexer before encryption (e.g., 1e4 for 4 decimals).
-    uint256 public immutable submissionScale;
+    uint256 public immutable SUBMISSION_SCALE;
 
     euint32 private encryptedSum;
     euint32 private encryptedCount;
@@ -83,7 +83,7 @@ contract ZKOracle is Ownable {
         indexer = _indexer;
         periodDuration = _periodDuration;
         maxSamplesPerPeriod = _maxSamplesPerPeriod;
-        submissionScale = _submissionScale;
+        SUBMISSION_SCALE = _submissionScale;
 
         periodStart = block.timestamp;
         encryptedSum = FHE.asEuint32(0);
@@ -95,23 +95,39 @@ contract ZKOracle is Ownable {
     //////////////////////////////////////////////////////////////*/
 
     modifier onlyIndexer() {
-        if (msg.sender != indexer) revert OracleUnauthorized();
+        _onlyIndexer();
         _;
     }
 
     modifier onlyAuthorizedFinalizer() {
-        if (msg.sender != indexer && msg.sender != owner()) revert OracleUnauthorized();
+        _onlyAuthorizedFinalizer();
         _;
     }
 
     modifier duringPeriod() {
-        if (block.timestamp >= periodStart + periodDuration) revert OraclePeriodNotFinished();
+        _duringPeriod();
         _;
     }
 
     modifier afterPeriod() {
-        if (block.timestamp < periodStart + periodDuration) revert OraclePeriodActive();
+        _afterPeriod();
         _;
+    }
+
+    function _onlyIndexer() internal view {
+        if (msg.sender != indexer) revert OracleUnauthorized();
+    }
+
+    function _onlyAuthorizedFinalizer() internal view {
+        if (msg.sender != indexer && msg.sender != owner()) revert OracleUnauthorized();
+    }
+
+    function _duringPeriod() internal view {
+        if (block.timestamp >= periodStart + periodDuration) revert OraclePeriodNotFinished();
+    }
+
+    function _afterPeriod() internal view {
+        if (block.timestamp < periodStart + periodDuration) revert OraclePeriodActive();
     }
 
     /*//////////////////////////////////////////////////////////////

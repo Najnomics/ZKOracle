@@ -14,7 +14,7 @@ contract OracleConsumer is Ownable {
     error ConsumerStale();
     error ConsumerLowConfidence();
 
-    IZKOracle public immutable oracle;
+    IZKOracle public immutable ORACLE;
 
     uint256 public freshnessThreshold;
     uint256 public minConfidence;
@@ -38,7 +38,7 @@ contract OracleConsumer is Ownable {
         if (_freshnessThreshold == 0 || _minConfidence == 0 || _minConfidence > 100) {
             revert ConsumerInvalidConfig();
         }
-        oracle = IZKOracle(oracleAddress);
+        ORACLE = IZKOracle(oracleAddress);
         freshnessThreshold = _freshnessThreshold;
         minConfidence = _minConfidence;
     }
@@ -52,7 +52,7 @@ contract OracleConsumer is Ownable {
     }
 
     function latestPrice() public view returns (PriceInfo memory info) {
-        (uint256 price, uint256 timestamp, uint256 confidence, uint32 sampleSize) = oracle.getLatestPrice();
+        (uint256 price, uint256 timestamp, uint256 confidence, uint32 sampleSize) = ORACLE.getLatestPrice();
         if (timestamp == 0 || block.timestamp - timestamp > freshnessThreshold) revert ConsumerStale();
         if (confidence < minConfidence) revert ConsumerLowConfidence();
         return PriceInfo({ price: price, sampleSize: sampleSize, updatedAt: timestamp, confidence: confidence });
