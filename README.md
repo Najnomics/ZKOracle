@@ -1136,6 +1136,9 @@ cd indexer && pnpm install && pnpm test
 
 # Indexer lint
 cd indexer && pnpm lint
+
+# End-to-end smoke test (docker + Prometheus + healthz)
+cd indexer && ./scripts/smoke-test.sh
 ```
 
 ### Test Suite
@@ -1204,6 +1207,8 @@ forge script script/Deploy.s.sol:Deploy \
   --verify \
   --slow
 ```
+
+> Full deployment playbook (including environment snippets and post-deploy checks) lives in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ### Production Checklist
 
