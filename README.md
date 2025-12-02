@@ -1098,6 +1098,7 @@ Conclusion: Privacy preserved!
 - **HTTP health probe**: the metrics server also exposes `GET /healthz`, returning the current cursor, lease holder, last loop/finalize timestamps, and the most recent error (if any) for k8s-style readiness checks.
 - **Slash-style cutovers**: `POST /cutover` (guarded by `CUTOVER_SHARED_SECRET`) lets an operator or Slack slash command release/claim the lease for a new `instanceId`, emitting a webhook alert so blue/green rollouts stay coordinated.
 - **Idle/backlog alerts**: configure `BACKLOG_ALERT_MS` to automatically ping Slack when no encrypted submissions have succeeded for the specified duration.
+- **Remote CLI control**: set `CUTOVER_ENDPOINT` if the helper should talk to a non-local metrics host (e.g., `https://indexer.prod.zkoracle.com/cutover`).
 
 ---
 

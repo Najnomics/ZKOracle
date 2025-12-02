@@ -79,13 +79,19 @@ async function main() {
         console.error("CUTOVER_SHARED_SECRET is not configured. Cannot call /cutover endpoint.");
         break;
       }
-      const instanceId = process.argv[3];
+      const instanceId = process.argv[3] && !process.argv[3].startsWith("http") ? process.argv[3] : undefined;
+      const endpointArg = process.argv[3] && process.argv[3].startsWith("http") ? process.argv[3] : process.argv[4];
+      const baseEndpoint = endpointArg ?? config.CUTOVER_ENDPOINT ?? `http://localhost:${config.METRICS_PORT}/cutover`;
+      const target = baseEndpoint.endsWith("/cutover")
+        ? baseEndpoint
+        : `${baseEndpoint.replace(/\/$/, "")}/cutover`;
+
       const payload: Record<string, string> = { requestedBy: "cli" };
       if (instanceId) {
         payload.instanceId = instanceId;
       }
       try {
-        const res = await fetch(`http://localhost:${config.METRICS_PORT}/cutover`, {
+        const res = await fetch(target, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -97,10 +103,10 @@ async function main() {
         if (!res.ok) {
           console.error("Cutover request failed:", data);
         } else {
-          console.log("Cutover request response:", data);
+          console.log("Cutover request response from", target, ":", data);
         }
       } catch (error) {
-        console.error("Failed to call /cutover endpoint:", error);
+        console.error("Failed to call /cutover endpoint", target, error);
       }
       break;
     }

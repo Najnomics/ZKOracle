@@ -35,7 +35,8 @@ pnpm test
 
 # use CLI helpers
 pnpm cli cursor
-pnpm cli cutover-api indexer-green
+pnpm cli cutover-api indexer-green            # local metrics host
+pnpm cli cutover-api indexer-green https://indexer.prod/cutover
 ```
 
 ### Environment Variables
@@ -61,6 +62,7 @@ pnpm cli cutover-api indexer-green
 | `ALERT_WEBHOOK_URL`    | Slack/Mattermost webhook for errors + lease contention alerts |
 | `CUTOVER_SHARED_SECRET`| Shared token required to call the `/cutover` webhook endpoint |
 | `BACKLOG_ALERT_MS`     | Raise an alert if no submissions have succeeded for this long |
+| `CUTOVER_ENDPOINT`     | Optional full URL for hitting `/cutover` from the CLI (defaults to localhost) |
 
 ### Notes
 
@@ -91,6 +93,7 @@ curl -X POST http://localhost:9464/cutover \
 - If `instanceId` is omitted it simply releases the lease so another replica can grab it.
 - Responses include whether the old lease was released, the new holder, and the expiry timestamp.
 - Every successful/blocked cutover also emits a Slack alert so there is an audit trail.
+- If you set `CUTOVER_ENDPOINT`, `pnpm cli cutover-api <id>` will target that URL automatically so you can run cutovers from your laptop without ssh-ing into the box.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.
 
