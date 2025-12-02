@@ -680,6 +680,19 @@ OracleConsumer.PriceInfo memory info = consumer.latestPrice();
 uint256 usdValue = consumer.quote(25_000); // 2.5 units (1e4 precision)
 ```
 
+JSON (front-end) usage:
+
+```ts
+const abi = [
+  "function latestPrice() view returns (uint256 price,uint32 sampleSize,uint256 updatedAt,uint256 confidence)",
+  "function quote(uint256 amount) view returns (uint256)",
+];
+const consumer = new ethers.Contract(CONSUMER_ADDRESS, abi, provider);
+const info = await consumer.latestPrice();
+if (Date.now() / 1000 - Number(info.updatedAt) > freshnessSLA) throw new Error("stale");
+const usdcAmount = await consumer.quote(25_000); // 2.5 ZEC scaled by 1e4
+```
+
 ### Indexer (Off-Chain)
 
 ```javascript
