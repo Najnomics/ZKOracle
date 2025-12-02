@@ -932,6 +932,9 @@ curl -X POST http://localhost:9464/cutover \
   -H "Content-Type: application/json" \
   -H "x-cutover-token: $CUTOVER_SHARED_SECRET" \
   -d '{"instanceId":"indexer-blue","requestedBy":"slash"}'
+
+# Or via CLI helper (talks to the same endpoint)
+pnpm cli cutover-api indexer-blue
 ```
 
 ---

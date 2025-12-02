@@ -35,6 +35,7 @@ pnpm test
 
 # use CLI helpers
 pnpm cli cursor
+pnpm cli cutover-api indexer-green
 ```
 
 ### Environment Variables

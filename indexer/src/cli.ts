@@ -14,6 +14,7 @@ Commands:
   force-release    Release the lease for this instance id
   doctor           Run cutover watchdog diagnostics
   takeover <id>    Forcefully take the lease for a new instance id
+  cutover-api [id] Hit the running /cutover webhook (uses CUTOVER_SHARED_SECRET)
 `;
 
 async function main() {
@@ -73,6 +74,36 @@ async function main() {
         console.log(success ? `Lease claimed by ${newId}` : "Failed to claim lease; still held by another instance.");
         break;
       }
+    case "cutover-api": {
+      if (!config.CUTOVER_SHARED_SECRET) {
+        console.error("CUTOVER_SHARED_SECRET is not configured. Cannot call /cutover endpoint.");
+        break;
+      }
+      const instanceId = process.argv[3];
+      const payload: Record<string, string> = { requestedBy: "cli" };
+      if (instanceId) {
+        payload.instanceId = instanceId;
+      }
+      try {
+        const res = await fetch(`http://localhost:${config.METRICS_PORT}/cutover`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-cutover-token": config.CUTOVER_SHARED_SECRET,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("Cutover request failed:", data);
+        } else {
+          console.log("Cutover request response:", data);
+        }
+      } catch (error) {
+        console.error("Failed to call /cutover endpoint:", error);
+      }
+      break;
+    }
       default:
         console.log(`Unknown command: ${command}`);
         console.log(usage);
