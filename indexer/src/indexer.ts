@@ -47,6 +47,8 @@ async function runIndexer() {
   let leaseExpiry = 0;
   let lastLeaseHolder: string | null = null;
   let closed = false;
+  let lastSubmissionAt = Date.now();
+  let backlogAlerted = false;
 
   type HealthState = {
     instanceId: string;
@@ -58,6 +60,9 @@ async function runIndexer() {
     lastFinalizeAt?: number;
     lastError?: string;
     submitting?: string;
+    lastSubmissionAt: number;
+    backlogMs: number;
+    backlogAlertActive: boolean;
   };
 
   const health: HealthState = {
@@ -67,6 +72,9 @@ async function runIndexer() {
     leaseExpiresAt: 0,
     leaseActive: false,
     lastLoopAt: Date.now(),
+    lastSubmissionAt: Date.now(),
+    backlogMs: 0,
+    backlogAlertActive: false,
   };
 
   const handleCutover = async (req: ExpressRequest, res: ExpressResponse) => {
@@ -279,6 +287,10 @@ async function runIndexer() {
           log.info("Trimmed processed transaction log", { purged });
         }
         log.info("Batch submitted", { cursor });
+        lastSubmissionAt = Date.now();
+        health.lastSubmissionAt = lastSubmissionAt;
+        backlogAlerted = false;
+        health.backlogAlertActive = false;
       } else {
         log.info("No new shielded txs found");
       }
@@ -292,6 +304,21 @@ async function runIndexer() {
       }
 
       health.lastLoopAt = Date.now();
+      health.lastSubmissionAt = lastSubmissionAt;
+      const idleMs = Date.now() - lastSubmissionAt;
+      health.backlogMs = idleMs;
+      if (idleMs >= config.BACKLOG_ALERT_MS) {
+        if (!backlogAlerted) {
+          backlogAlerted = true;
+          health.backlogAlertActive = true;
+          const minutes = Math.round(idleMs / 60000);
+          log.warn("Indexer idle longer than threshold", { minutes });
+          await sendAlert("Indexer idle threshold exceeded", { idleMs, threshold: config.BACKLOG_ALERT_MS });
+        }
+      } else if (backlogAlerted) {
+        backlogAlerted = false;
+        health.backlogAlertActive = false;
+      }
       await maybeFinalizePeriod();
 
       stats.incrementIterations();

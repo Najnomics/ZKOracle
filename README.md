@@ -1094,6 +1094,7 @@ Conclusion: Privacy preserved!
 - **Lease-aware failover**: each replica sets `INDEXER_INSTANCE_ID`; the SQLite coordination lease guarantees only one active submitter at a time and exports `zkoracle_lease_active` so dashboards/alerts can track leadership changes.
 - **HTTP health probe**: the metrics server also exposes `GET /healthz`, returning the current cursor, lease holder, last loop/finalize timestamps, and the most recent error (if any) for k8s-style readiness checks.
 - **Slash-style cutovers**: `POST /cutover` (guarded by `CUTOVER_SHARED_SECRET`) lets an operator or Slack slash command release/claim the lease for a new `instanceId`, emitting a webhook alert so blue/green rollouts stay coordinated.
+- **Idle/backlog alerts**: configure `BACKLOG_ALERT_MS` to automatically ping Slack when no encrypted submissions have succeeded for the specified duration.
 
 ---
 

@@ -59,6 +59,7 @@ pnpm cli cursor
 | `PROCESSED_RETENTION_SECONDS` | How long to retain processed tx ids for dedupe       |
 | `ALERT_WEBHOOK_URL`    | Slack/Mattermost webhook for errors + lease contention alerts |
 | `CUTOVER_SHARED_SECRET`| Shared token required to call the `/cutover` webhook endpoint |
+| `BACKLOG_ALERT_MS`     | Raise an alert if no submissions have succeeded for this long |
 
 ### Notes
 
@@ -73,6 +74,22 @@ pnpm cli cursor
 - Keep the alerting hooks in `logger.ts` wired into the polling loop (`log.info`) for runtime observability.
 - Every process exposes `GET /healthz` (served by the same Express app as `/metrics`) so you can plug the indexer into Kubernetes-style readiness checks or simple curl-based monitoring.
 - A privileged `POST /cutover` endpoint (requires `CUTOVER_SHARED_SECRET` via `x-cutover-token` or `Authorization` header) can release/claim the lease for a new `instanceId`, making Slack slash commands or runbook-driven failovers trivial.
+- If no submissions succeed for `BACKLOG_ALERT_MS` the indexer sends a Slack alert (`Indexer idle threshold exceeded`) so an operator knows the feed has gone dry.
+
+### Remote Cutovers (Slash Command Ready)
+
+`/cutover` is designed to be triggered from a Slack slash command or incident runbook:
+
+```bash
+curl -X POST http://localhost:9464/cutover \
+  -H "Content-Type: application/json" \
+  -H "x-cutover-token: $CUTOVER_SHARED_SECRET" \
+  -d '{"instanceId":"indexer-green","requestedBy":"slack/ops"}'
+```
+
+- If `instanceId` is omitted it simply releases the lease so another replica can grab it.
+- Responses include whether the old lease was released, the new holder, and the expiry timestamp.
+- Every successful/blocked cutover also emits a Slack alert so there is an audit trail.
 
 The sample code favours clarity over completeness. It intentionally leaves TODOs where project-specific logic (estimation heuristics, retries, metrics) must be implemented. Use the Zcash docs in `CONTEXT/` to flesh out the estimation pipeline and follow the permission patterns from the Fhenix docs so only aggregate data is ever decrypted.
 
